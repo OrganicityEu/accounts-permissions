@@ -1,6 +1,8 @@
 
 package eu.organicity.accounts.permissions;
 
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +24,17 @@ public class App
 
     String token = a.login();
 
+    Logger log = LoggerFactory.getLogger(App.class);
+
+    log.info("Got token: " + token);
+
     // user id of organicity/fbuether
-    // a.getUserRoles("0dfc01f7-a234-4cbc-8e70-7ae361127dd4");
+    List<String> roles = a.getUserRoles("0dfc01f7-a234-4cbc-8e70-7ae361127dd4");
+    if (roles != null) {
+      log.info("got roles:");
+      for(String role : roles) {
+        log.info("Role " + role);
+      }
+    }
   }
 }
