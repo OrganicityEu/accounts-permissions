@@ -29,12 +29,16 @@ public class App
     log.info("Got token: " + token);
 
     // user id of organicity/fbuether
-    List<String> roles = a.getUserRoles("0dfc01f7-a234-4cbc-8e70-7ae361127dd4");
+    String userId = "0dfc01f7-a234-4cbc-8e70-7ae361127dd4";
+
+    List<String> roles = a.getUserRoles(userId);
     if (roles != null) {
       log.info("got roles:");
       for(String role : roles) {
         log.info("Role " + role);
       }
     }
+
+    a.setUserRole(userId, "scenarios:admin");
   }
 }
