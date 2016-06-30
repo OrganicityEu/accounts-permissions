@@ -12,12 +12,20 @@ import io.jsonwebtoken.ExpiredJwtException;
 
 public class App
 {
-	public void exampleGetRoles(String auth) {
+	public static void exampleGetRoles(String auth) {
 	    Accounts a = new Accounts(auth);
 
 	    System.out.println(auth);
 
 	    String token = a.login();
+
+	    if (token == null) {
+				LoggerFactory.getLogger(App.class).
+					warn("could not aquire auth token, exiting.");
+				return;
+			}
+
+
 	    System.out.println(token);
 
 	    Logger log = LoggerFactory.getLogger(App.class);
@@ -65,9 +73,11 @@ public class App
     ((ch.qos.logback.classic.Logger)LoggerFactory.
      getLogger(Logger.ROOT_LOGGER_NAME)).
       setLevel(ch.qos.logback.classic.Level.TRACE);
-    
-    App app = new App();
-    app.exampleGetRoles(args[0]);
-    
+
+    String auth = args.length > 0
+			? args[0]
+			: "<INSERT TOKEN HERE>";
+
+    exampleGetRoles(auth);
   }
 }

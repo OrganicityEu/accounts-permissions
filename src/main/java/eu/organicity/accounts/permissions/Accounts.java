@@ -115,7 +115,12 @@ public class Accounts
           Object reqEntity = req.getEntity();
           if (reqEntity != null) {
             Accounts.log.trace("");
-            Accounts.log.trace(reqEntity.toString());
+            if (reqEntity instanceof Form) {
+              Accounts.log.trace("Form: " + ((Form)reqEntity).asMap().toString());
+            }
+            else {
+              Accounts.log.trace(reqEntity.toString());
+            }
           }
 
           Accounts.log.trace("");
@@ -286,6 +291,10 @@ public class Accounts
     // Connects with the accounts-permissions service account.
     Accounts.log.info("Logging in with accounts-permissions.");
 
+    if (this.auth == null) {
+      Accounts.log.error("No auth token for login supplied. Canceling login.");
+      return null;
+    }
 
     String url = "https://accounts.organicity.eu/realms/organicity/" +
       "protocol/openid-connect/token";
@@ -293,7 +302,7 @@ public class Accounts
 
     Response res = this.getClient().target(url).
       request().
-      header("Authorization", this.auth).
+      header("Authorization", "Bearer " + this.auth).
       buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
       invoke();
 
@@ -303,15 +312,19 @@ public class Accounts
       Accounts.log.info("Reply: " + res.getStatus());
       Accounts.log.info("Body: " + body);
 
-      JSONObject reply = new JSONObject(body);
-
-      Accounts.log.trace("token: " + reply.toString());
-
-
-      String token = reply.getString("access_token");
-
-      this.authToken = token;
-      return token;
+      if (res.getStatus() == 200) {
+        JSONObject reply = new JSONObject(body);
+        String token = reply.getString("access_token");
+        Accounts.log.trace("token: " + token);
+        this.authToken = token;
+        return token;
+      }
+      else {
+        Accounts.log.warn("login was not successful. Reply: HTTP " +
+          res.getStatus());
+        Accounts.log.warn("Body: " + body);
+        return null;
+      }
     }
     else {
       Accounts.log.trace("login reply has no content.");
