@@ -17,11 +17,8 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Form;
 import javax.ws.rs.client.Entity;
-import java.util.Map;
-import java.util.List;
-import java.util.Vector;
+import java.util.*;
 import java.io.IOException;
-import java.util.Scanner;
 
 
 import org.json.JSONObject;
@@ -176,7 +173,7 @@ public class Accounts
 
     String body = r.readEntity(String.class);
 
-    Accounts.log.info("Body: " + body);
+    Accounts.log.trace("Body: " + body);
 
     return body;
   }
@@ -228,8 +225,10 @@ public class Accounts
           }
         }
 
-        JSONObject allClientMappings = roleMappings.getJSONObject("clientMappings");
-        if (allClientMappings != null && clientId != null) {
+        JSONObject allClientMappings = roleMappings.
+          getJSONObject("clientMappings");
+        if (allClientMappings != null && clientId != null &&
+          allClientMappings.has(clientId)) {
           JSONObject clientDesc = allClientMappings.getJSONObject(clientId);
           if (clientDesc != null) {
             JSONArray clientMappings = clientDesc.getJSONArray("mappings");
@@ -267,7 +266,7 @@ public class Accounts
   private String getClientOfRole(String role)
   {
     return this.isRealmRole(role)
-      ? null
+      ? ""
       : role.substring(0, role.indexOf(':'));
   }
 
@@ -275,8 +274,94 @@ public class Accounts
   {
     return this.isRealmRole(role)
       ? role
-      : role.substring(role.indexOf(':'));
+      : role.substring(role.indexOf(':') + 1);
   }
+
+  private HashMap<String,String> clientNameToId = new HashMap<String, String>();
+
+  private WeakHashMap<String, String> roleNameToId =
+  new WeakHashMap<String, String>();
+
+
+  private String getClientIdByName(String clientId)
+  {
+    if (!this.clientNameToId.containsKey(clientId)) {
+      Response res = this.getClient().
+        target(Accounts.baseUrl + "realms/organicity/clients").
+        resolveTemplate("id", clientId).
+        request().
+        header("Authorization", "Bearer " + this.getAuthToken()).
+        buildGet().
+        invoke();
+
+      if (res.getStatus() == 200) {
+        JSONArray clients = new JSONArray(res.readEntity(String.class));
+        for(Object clientObj : clients) {
+          JSONObject client = (JSONObject)clientObj;
+          if (client != null) {
+            String currId = client.getString("id");
+            String currClientId = client.getString("clientId");
+            if (currId != null && currClientId != null) {
+              this.clientNameToId.put(currClientId, currId);
+            }
+          }
+        }
+
+        if (!this.clientNameToId.containsKey(clientId)) {
+          this.clientNameToId.put(clientId, null);
+        }
+      }
+      else {
+        Accounts.log.trace("Could not get client with id " + clientId);
+        return null;
+      }
+    }
+
+    return this.clientNameToId.get(clientId);
+  }
+
+  private String getRoleIdByName(String roleName)
+  {
+    String target = Accounts.baseUrl + (this.isRealmRole(roleName)
+      ? "realms/organicity/roles/{role-name}"
+      : "realms/organicity/clients/{id}/roles/{role-name}");
+
+    String clientId = this.isRealmRole(roleName)
+      ? ""
+      : this.getClientIdByName(this.getClientOfRole(roleName));
+
+    if (!this.roleNameToId.containsKey(roleName)) {
+      Response res = this.getClient().
+        target(target).
+        resolveTemplate("id", clientId).
+        resolveTemplate("role-name", this.getNameOfRole(roleName)).
+        request().
+        header("Authorization", "Bearer " + this.getAuthToken()).
+        buildGet().
+        invoke();
+
+      if (res.getStatus() == 200) {
+        JSONObject role = new JSONObject(res.readEntity(String.class));
+        String currId = role.getString("id");
+        String currName = role.getString("name");
+        if (currId != null && currName != null &&
+          this.getNameOfRole(roleName).equals(currName)) {
+          this.roleNameToId.put(roleName, currId);
+        }
+
+        if (!this.roleNameToId.containsKey(roleName)) {
+          this.roleNameToId.put(roleName, null);
+        }
+      }
+      else {
+        Accounts.log.trace("Could not get role with name " + roleName);
+        return null;
+      }
+    }
+
+    return this.roleNameToId.get(roleName);
+  }
+
 
   /**
    * Assigns a role to a user.
@@ -287,23 +372,37 @@ public class Accounts
   public Boolean setUserRole(String userId, String role)
   {
     String target = Accounts.baseUrl + (this.isRealmRole(role)
-      ? "/realms/organicity/users/{userId}/role-mappings/realm"
-      : "/realms/organicity/users/{userId}/role-mappings/clients/{client}");
+      ? "realms/organicity/users/{userId}/role-mappings/realm"
+      : "realms/organicity/users/{userId}/role-mappings/clients/{client}");
+
+    String clientId = this.isRealmRole(role)
+      ? ""
+      : this.getClientIdByName(this.getClientOfRole(role));
+
+    String roleId = this.getRoleIdByName(role);
+    if (roleId == null) {
+      Accounts.log.warn("could not assign role " + role + ", id not found.");
+      return false;
+    }
 
     JSONArray jsonRole = new JSONArray().
       put(new JSONObject().
-        put("name", this.getNameOfRole(role)));
+        put("name", this.getNameOfRole(role)).
+        put("id", roleId));
 
     Response res = this.getClient().
       target(target).
       resolveTemplate("userId", userId).
-      resolveTemplate("client", this.getClientOfRole(role)).
+      resolveTemplate("client", clientId).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
       buildPost(Entity.json(jsonRole.toString())).
       invoke();
 
-    return res.getStatus() == 200;
+    Accounts.log.trace("setUserRole " + res.getStatus() + ": " +
+      res.readEntity(String.class));
+
+    return res.getStatus() == 204;
   }
 
 
@@ -351,7 +450,7 @@ public class Accounts
     if (res.hasEntity()) {
       String body = res.readEntity(String.class);
       Accounts.log.info("Reply: " + res.getStatus());
-      Accounts.log.info("Body: " + body);
+      Accounts.log.trace("Body: " + body);
 
       if (res.getStatus() == 200) {
         JSONObject reply = new JSONObject(body);
