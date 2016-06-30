@@ -198,11 +198,11 @@ public class Accounts
 
       Accounts.log.trace("GetUserRoles: " + body);
 
-
       List<String> roles = new Vector<String>();
       return roles;
     }
     else {
+      Accounts.log.warn("Did not receive roles for user.");
       return null;
     }
   }
@@ -280,14 +280,12 @@ public class Accounts
     // Connects with the accounts-permissions service account.
     Accounts.log.info("Logging in with accounts-permissions.");
 
-    Client c = this.getClient();
-
 
     String url = "https://accounts.organicity.eu/realms/organicity/" +
       "protocol/openid-connect/token";
 
 
-    Response res = c.target(url).
+    Response res = this.getClient().target(url).
       request().
       header("Authorization", "Basic " + AccountsSecret.BasicAuth).
       buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
