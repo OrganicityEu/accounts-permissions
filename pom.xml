@@ -82,5 +82,11 @@
       <version>20160212</version>
     </dependency>
 
+	<dependency>
+	    <groupId>eu.organicity.eu</groupId>
+	    <artifactId>java-jwt-parser</artifactId>
+	    <version>0.0.1-SNAPSHOT</version>
+	</dependency>
+
   </dependencies>
 </project>

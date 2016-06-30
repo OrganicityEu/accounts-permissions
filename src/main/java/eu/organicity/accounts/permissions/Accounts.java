@@ -41,6 +41,12 @@ public class Accounts
 
   private static String baseUrl = "https://accounts.organicity.eu/admin/";
 
+  private String auth = null;
+
+  public Accounts(String auth) {
+	  this.auth = auth;
+  }
+
   private Client client = null;
 
   /**
@@ -287,7 +293,7 @@ public class Accounts
 
     Response res = this.getClient().target(url).
       request().
-      header("Authorization", "Basic " + AccountsSecret.BasicAuth).
+      header("Authorization", this.auth).
       buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
       invoke();
 
