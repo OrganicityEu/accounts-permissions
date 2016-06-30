@@ -6,7 +6,6 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Invocation.Builder;
 import javax.ws.rs.client.Invocation;
 import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.client.ClientRequestFilter;
 import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.client.ClientResponseContext;
 import javax.ws.rs.client.ClientRequestContext;
@@ -40,12 +39,6 @@ public class Accounts
   private static Logger log = LoggerFactory.getLogger(Accounts.class);
 
   private static String baseUrl = "https://accounts.organicity.eu/admin/";
-
-  private String auth = null;
-
-  public Accounts(String auth) {
-	  this.auth = auth;
-  }
 
   private Client client = null;
 
@@ -190,10 +183,23 @@ public class Accounts
 
   /**
    * Determines the list of roles that are assigned to the given user.
+   * This returns all realm-level roles assigned, but no client roles.
    * @param userId The user id, as given by the "sub" field in the auth token.
    * @return The list of roles assigned to the user.
-     */
-  public List<String> getUserRoles(String userId)
+   */
+  public List<String> getUserRoles(String userId) {
+    return this.getUserRoles(userId, null);
+  }
+
+  /**
+   * Determines the list of roles that are assigned to the given user.
+   * This always returns all realm-level roles assigned, and if a non-null
+   * clientId is given, also returns the list of roles for that client.
+   * @param userId The user id, as given by the "sub" field in the auth token.
+   * @param clientId The client for which roles are requested
+   * @return The list of roles assigned to the user.
+   */
+  public List<String> getUserRoles(String userId, String clientId)
   {
     Response res = this.getClient().
       target(Accounts.baseUrl + "realms/organicity/users/{id}/role-mappings").
@@ -203,14 +209,47 @@ public class Accounts
       buildGet().
       invoke();
 
-
     if (res.hasEntity()) {
       String body = res.readEntity(String.class);
-
       Accounts.log.trace("GetUserRoles: " + body);
 
-      List<String> roles = new Vector<String>();
-      return roles;
+      if (res.getStatus() == 200) {
+        JSONObject roleMappings = new JSONObject(body);
+
+        List<String> roles = new Vector<String>();
+
+        JSONArray realmMappings = roleMappings.getJSONArray("realmMappings");
+        for(Object mapping : realmMappings) {
+          if (mapping instanceof JSONObject) {
+            String roleName = ((JSONObject)mapping).getString("name");
+            if (roleName != null) {
+              roles.add(roleName);
+            }
+          }
+        }
+
+        JSONObject allClientMappings = roleMappings.getJSONObject("clientMappings");
+        if (allClientMappings != null && clientId != null) {
+          JSONObject clientDesc = allClientMappings.getJSONObject(clientId);
+          if (clientDesc != null) {
+            JSONArray clientMappings = clientDesc.getJSONArray("mappings");
+
+            for(Object mapping : clientMappings) {
+              if (mapping instanceof JSONObject) {
+                String roleName = ((JSONObject)mapping).getString("name");
+                if (roleName != null) {
+                  roles.add(clientId + ":" + roleName);
+                }
+              }
+            }
+          }
+        }
+
+        return roles;
+      }
+      else {
+        return null;
+      }
     }
     else {
       Accounts.log.warn("Did not receive roles for user.");
@@ -273,7 +312,7 @@ public class Accounts
   protected String getAuthToken()
   {
     if (this.authToken == null) {
-      this.login();
+      throw new Error("Accounts cannot login, no Basic Auth given.");
     }
 
     return this.authToken;
@@ -284,14 +323,16 @@ public class Accounts
    *
    * FIXME: This currently uses the client/secret login mechanism; replace
    * with public/private key login.
+   * @param basicAuthString The string used for HTTP Basic Authentication (e.g.
+   *   username:password base64encoded).
    * @return The authentication token to be used by this client.
    */
-  public String login()
+  public String login(String basicAuthString)
   {
     // Connects with the accounts-permissions service account.
     Accounts.log.info("Logging in with accounts-permissions.");
 
-    if (this.auth == null) {
+    if (basicAuthString == null) {
       Accounts.log.error("No auth token for login supplied. Canceling login.");
       return null;
     }
@@ -302,7 +343,7 @@ public class Accounts
 
     Response res = this.getClient().target(url).
       request().
-      header("Authorization", "Bearer " + this.auth).
+      header("Authorization", "Basic " + basicAuthString).
       buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
       invoke();
 
