@@ -289,7 +289,7 @@ public class Accounts
 
     Response res = c.target(url).
       request().
-      header("Authorization", "Basic <ENTERAUTHHERE>").
+      header("Authorization", "Basic " + AccountsSecret.BasicAuth).
       buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
       invoke();
 
