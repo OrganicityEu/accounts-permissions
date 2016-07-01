@@ -186,6 +186,7 @@ public class Accounts
   /**
    * Determines the list of roles that are assigned to the given user.
    * This returns all realm-level roles assigned, but no client roles.
+   *
    * @param userId The user id, as given by the "sub" field in the auth token.
    * @return The list of roles assigned to the user.
    */
@@ -197,15 +198,67 @@ public class Accounts
    * Determines the list of roles that are assigned to the given user.
    * This always returns all realm-level roles assigned, and if a non-null
    * clientId is given, also returns the list of roles for that client.
+   *
    * @param userId The user id, as given by the "sub" field in the auth token.
    * @param clientId The client for which roles are requested
    * @return The list of roles assigned to the user.
    */
   public List<String> getUserRoles(String userId, String clientId)
   {
+    // fetch realm-level role mappings of this user
     Response res = this.getClient().
-      target(Accounts.baseUrl + "realms/organicity/users/{id}/role-mappings").
+      target(Accounts.baseUrl +
+        "realms/organicity/users/{id}/role-mappings/realm/composite").
       resolveTemplate("id", userId).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      buildGet().
+      invoke();
+
+    List<String> roles = new Vector<String>();
+
+    if (res.hasEntity()) {
+      String body = res.readEntity(String.class);
+      Accounts.log.trace("GetUserRoles: " + body);
+
+      if (res.getStatus() == 200) {
+        JSONArray roleMappings = new JSONArray(body);
+
+        for(Object mappingObj : roleMappings) {
+          JSONObject mapping = (JSONObject)mappingObj;
+
+          if (mapping != null) {
+            String roleId = mapping.getString("id");
+            String roleName = mapping.getString("name");
+
+            if (roleId != null && roleName != null) {
+              roles.add(roleName);
+              this.roleNameToId.put(roleName, roleId);
+            }
+          }
+        }
+      }
+      else {
+        Accounts.log.warn("Could not read realm-level roles for user." +
+          userId);
+      }
+    }
+    else {
+      Accounts.log.warn("Did not receive realm-level roles for user.");
+      return null;
+    }
+
+    // if no client roles are requested, exit now.
+    if (clientId == null) {
+      return roles;
+    }
+
+    // fetch role mappings for client
+    res = this.getClient().
+      target(Accounts.baseUrl +
+        "realms/organicity/users/{id}/role-mappings/clients/{client}/composite").
+      resolveTemplate("id", userId).
+      resolveTemplate("client", this.getClientIdByName(clientId)).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
       buildGet().
@@ -216,49 +269,33 @@ public class Accounts
       Accounts.log.trace("GetUserRoles: " + body);
 
       if (res.getStatus() == 200) {
-        JSONObject roleMappings = new JSONObject(body);
+        JSONArray roleMappings = new JSONArray(body);
 
-        List<String> roles = new Vector<String>();
+        for(Object mappingObj : roleMappings) {
+          JSONObject mapping = (JSONObject)mappingObj;
 
-        JSONArray realmMappings = roleMappings.getJSONArray("realmMappings");
-        for(Object mapping : realmMappings) {
-          if (mapping instanceof JSONObject) {
-            String roleName = ((JSONObject)mapping).getString("name");
-            if (roleName != null) {
-              roles.add(roleName);
+          if (mapping != null) {
+            String roleId = mapping.getString("id");
+            String roleName = mapping.getString("name");
+
+            if (roleId != null && roleName != null) {
+              roles.add(clientId + ":" + roleName);
+              this.roleNameToId.put(clientId + ":" + roleName, roleId);
             }
           }
         }
-
-        JSONObject allClientMappings = roleMappings.
-          getJSONObject("clientMappings");
-        if (allClientMappings != null && clientId != null &&
-          allClientMappings.has(clientId)) {
-          JSONObject clientDesc = allClientMappings.getJSONObject(clientId);
-          if (clientDesc != null) {
-            JSONArray clientMappings = clientDesc.getJSONArray("mappings");
-
-            for(Object mapping : clientMappings) {
-              if (mapping instanceof JSONObject) {
-                String roleName = ((JSONObject)mapping).getString("name");
-                if (roleName != null) {
-                  roles.add(clientId + ":" + roleName);
-                }
-              }
-            }
-          }
-        }
-
-        return roles;
       }
       else {
-        return null;
+        Accounts.log.warn("Could not read client-level roles for user." +
+          userId);
       }
     }
     else {
-      Accounts.log.warn("Did not receive roles for user.");
+      Accounts.log.warn("Did not receive client-level roles for user.");
       return null;
     }
+
+    return roles;
   }
 
 
@@ -334,6 +371,11 @@ public class Accounts
     String clientId = this.isRealmRole(roleName)
       ? ""
       : this.getClientIdByName(this.getClientOfRole(roleName));
+
+    if (clientId == null) {
+      Accounts.log.warn("Could not determine clientId for role " + roleName);
+      return null;
+    }
 
     if (!this.roleNameToId.containsKey(roleName)) {
       Response res = this.getClient().
