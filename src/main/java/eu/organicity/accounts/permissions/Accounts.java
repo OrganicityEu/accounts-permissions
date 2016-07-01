@@ -9,6 +9,9 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.client.ClientResponseContext;
 import javax.ws.rs.client.ClientRequestContext;
+
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.ClientProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +57,9 @@ public class Accounts
 
   private Client createClient()
   {
-    Client c = ClientBuilder.newClient();
+    ClientConfig config = new ClientConfig();
+    config.property(ClientProperties.SUPPRESS_HTTP_COMPLIANCE_VALIDATION, true);
+    Client c = ClientBuilder.newClient(config);
 
     c.register(
       new ClientResponseFilter() {
@@ -470,5 +475,40 @@ public class Accounts
       Accounts.log.trace("login reply has no content.");
       return null;
     }
+  }
+
+  public Boolean removeUserRole(String userId, String roleName)
+  {
+    String target = Accounts.baseUrl + (this.isRealmRole(roleName)
+      ? "realms/organicity/users/{userId}/role-mappings/realm"
+      : "realms/organicity/users/{userId}/role-mappings/clients/{client}");
+
+    String clientId = this.isRealmRole(roleName)
+      ? ""
+      : this.getClientIdByName(this.getClientOfRole(roleName));
+
+    String roleId = this.getRoleIdByName(roleName);
+    if (roleId == null) {
+      Accounts.log.warn("could not remove role " + roleName + ", id not found.");
+      return false;
+    }
+
+    JSONArray jsonRole = new JSONArray().
+      put(new JSONObject().
+        put("name", this.getNameOfRole(roleName)).
+        put("id", roleId));
+
+    Response res = this.getClient().
+      target(target).
+      resolveTemplate("userId", userId).
+      resolveTemplate("client", clientId).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      method("DELETE", Entity.json(jsonRole.toString()));
+
+    Accounts.log.trace("setUserRole " + res.getStatus() + ": " +
+      res.readEntity(String.class));
+
+    return res.getStatus() == 204;
   }
 }
