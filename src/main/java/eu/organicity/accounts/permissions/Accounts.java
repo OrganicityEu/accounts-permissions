@@ -9,9 +9,9 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.client.ClientResponseContext;
 import javax.ws.rs.client.ClientRequestContext;
-
-import org.glassfish.jersey.client.ClientConfig;
-import org.glassfish.jersey.client.ClientProperties;
+//
+//import org.glassfish.jersey.client.ClientConfig;
+//import org.glassfish.jersey.client.ClientProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,9 +57,7 @@ public class Accounts
 
   private Client createClient()
   {
-    ClientConfig config = new ClientConfig();
-    config.property(ClientProperties.SUPPRESS_HTTP_COMPLIANCE_VALIDATION, true);
-    Client c = ClientBuilder.newClient(config);
+    Client c = ClientBuilder.newClient();
 
     c.register(
       new ClientResponseFilter() {
