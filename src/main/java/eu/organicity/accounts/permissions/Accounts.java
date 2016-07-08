@@ -9,12 +9,9 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.client.ClientResponseContext;
 import javax.ws.rs.client.ClientRequestContext;
-//
-//import org.glassfish.jersey.client.ClientConfig;
-//import org.glassfish.jersey.client.ClientProperties;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
@@ -195,13 +192,13 @@ public class Accounts
   /**
    * Determines the list of roles that are assigned to the given user.
    * This always returns all realm-level roles assigned, and if a non-null
-   * clientId is given, also returns the list of roles for that client.
+   * clientName is given, also returns the list of roles for that client.
    *
    * @param userId The user id, as given by the "sub" field in the auth token.
-   * @param clientId The client for which roles are requested
+   * @param clientName The client for which roles are requested
    * @return The list of roles assigned to the user.
    */
-  public List<String> getUserRoles(String userId, String clientId)
+  public List<String> getUserRoles(String userId, String clientName)
   {
     // fetch realm-level role mappings of this user
     Response res = this.getClient().
@@ -246,6 +243,12 @@ public class Accounts
       return null;
     }
 
+    if (clientName == null) {
+      return roles;
+    }
+
+    String clientId = this.getClientIdByName(clientName);
+
     // if no client roles are requested, exit now.
     if (clientId == null) {
       return roles;
@@ -256,7 +259,7 @@ public class Accounts
       target(Accounts.baseUrl +
         "realms/organicity/users/{id}/role-mappings/clients/{client}/composite").
       resolveTemplate("id", userId).
-      resolveTemplate("client", this.getClientIdByName(clientId)).
+      resolveTemplate("client", clientId).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
       buildGet().
@@ -277,8 +280,8 @@ public class Accounts
             String roleName = mapping.getString("name");
 
             if (roleId != null && roleName != null) {
-              roles.add(clientId + ":" + roleName);
-              this.roleNameToId.put(clientId + ":" + roleName, roleId);
+              roles.add(clientName + ":" + roleName);
+              this.roleNameToId.put(clientName + ":" + roleName, roleId);
             }
           }
         }
@@ -352,7 +355,7 @@ public class Accounts
         }
       }
       else {
-        Accounts.log.trace("Could not get client with id " + clientId);
+        Accounts.log.info("Could not get client with id " + clientId);
         return null;
       }
     }
