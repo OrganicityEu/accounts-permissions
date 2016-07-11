@@ -53,6 +53,13 @@
       <scope>provided</scope>
     </dependency>
 
+    <dependency>
+      <groupId>eu.organicity</groupId>
+      <artifactId>java-jwt-parser</artifactId>
+      <version>0.0.1-SNAPSHOT</version>
+    </dependency>
+
+
     <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
     <dependency>
       <groupId>org.slf4j</groupId>

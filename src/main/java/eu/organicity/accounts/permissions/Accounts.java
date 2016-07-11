@@ -10,6 +10,7 @@ import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.client.ClientResponseContext;
 import javax.ws.rs.client.ClientRequestContext;
 
+import io.jsonwebtoken.Claims;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +21,7 @@ import javax.ws.rs.client.Entity;
 import java.util.*;
 import java.io.IOException;
 
+import eu.organicity.JwtParser;
 
 import org.json.JSONObject;
 import org.json.JSONArray;
@@ -38,6 +40,11 @@ public class Accounts
   private static String baseUrl = "https://accounts.organicity.eu/admin/";
 
   private Client client = null;
+
+  protected Accounts()
+  {
+    // This constructor only inhibits external new-construction.
+  }
 
   /**
    * Creates a new JAX RS Client as the base for performing HTTP requests.
@@ -140,43 +147,57 @@ public class Accounts
     return c;
   }
 
-  private String demonstratePerformHttpRequest(String userId)
+  /**
+   * Checks if the current login token is still valid, and if it is not,
+   * refreshes it by performing a new login.
+   */
+  private void refreshLoginIfRequired()
   {
-    Accounts.log.info("Requesting user roles for " + userId);
-
-    Client c = ClientBuilder.newClient();
-
-    WebTarget t = c.target(Accounts.baseUrl + "realms/organicity/users/" + userId +
-                           "/role-mappings/realm");
-
-    Builder b = t.request();
-
-    Invocation i = b.buildGet();
-
-    Response r = i.invoke();
-
-
-    MultivaluedMap<String, Object> headers = r.getHeaders();
-
-    Accounts.log.info("Reply Status Code: " + r.getStatus());
-
-
-    for (Map.Entry<String, List<Object>> entry : headers.entrySet()) {
-      Accounts.log.info("Header: " + entry.getKey() + ":");
-
-      for (Object value: entry.getValue()) {
-        String valueString = value.toString();
-        Accounts.log.info(valueString);
-      }
+    String token = this.authToken;
+    if (token == null) {
+      this.refreshLogin();
+      return;
     }
 
+    Claims c = null;
+    try {
+      c = (new JwtParser()).parseJWT(token);
+    }
+    catch (Exception e) {
+      this.refreshLogin();
+      return;
+    }
 
-    String body = r.readEntity(String.class);
+    if (c == null) {
+      this.refreshLogin();
+      return;
+    }
 
-    Accounts.log.trace("Body: " + body);
+    // If the current token expires in the next 30 seconds, refresh.
+    Calendar in30seconds = Calendar.getInstance();
+    in30seconds.add(Calendar.SECOND, 30);
+    Date expires = null;
+    expires = c.getExpiration();
 
-    return body;
+    Accounts.log.trace("Token Expiration check: Token expires " +
+      expires.toString());
+
+    if (expires != null && expires.before(in30seconds.getTime())) {
+      this.refreshLogin();
+    }
   }
+
+  private void refreshLogin()
+  {
+    if (this.basicAuthString != null) {
+      this.loginBasicAuth(this.basicAuthString);
+    }
+    else {
+      Accounts.log.warn("No login mechanism available.");
+    }
+  }
+
+
 
   /**
    * Determines the list of roles that are assigned to the given user.
@@ -323,7 +344,7 @@ public class Accounts
   private HashMap<String,String> clientNameToId = new HashMap<String, String>();
 
   private WeakHashMap<String, String> roleNameToId =
-  new WeakHashMap<String, String>();
+    new WeakHashMap<String, String>();
 
 
   private String getClientIdByName(String clientId)
@@ -458,23 +479,34 @@ public class Accounts
 
   protected String getAuthToken()
   {
+    this.refreshLoginIfRequired();
+
     if (this.authToken == null) {
-      throw new Error("Accounts cannot login, no Basic Auth given.");
+      throw new Error("Accounts cannot login, no Authentication Token could " +
+        "be acquired.");
     }
 
     return this.authToken;
   }
 
+  private String basicAuthString = null;
+
   /**
-   * Acquires a login token for this tool.
+   * Greates a new Organicity Accounts interface which performs login using
+   * Basic Authentication.
    *
-   * FIXME: This currently uses the client/secret login mechanism; replace
-   * with public/private key login.
    * @param basicAuthString The string used for HTTP Basic Authentication (e.g.
-   *   username:password base64encoded).
-   * @return The authentication token to be used by this client.
+   *   username:password base64 encoded).
+   * @return The new Organicity Accounts interface object.
    */
-  public String login(String basicAuthString)
+  public static Accounts withBasicAuth(String basicAuthString)
+  {
+    Accounts a = new Accounts();
+    a.basicAuthString = basicAuthString;
+    return a;
+  }
+
+  protected String loginBasicAuth(String basicAuthString)
   {
     // Connects with the accounts-permissions service account.
     Accounts.log.info("Logging in with accounts-permissions.");
@@ -483,6 +515,8 @@ public class Accounts
       Accounts.log.error("No auth token for login supplied. Canceling login.");
       return null;
     }
+
+    this.basicAuthString = basicAuthString;
 
     String url = "https://accounts.organicity.eu/realms/organicity/" +
       "protocol/openid-connect/token";
