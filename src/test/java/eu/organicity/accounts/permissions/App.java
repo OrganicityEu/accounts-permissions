@@ -50,7 +50,7 @@ public class App {
 			}
 		}
 		
-		// Get all `demo roles`
+		// Get all `account roles`
 		List<String> accountRoles = a.getUserRoles(userId, "account");
 		if (accountRoles != null) {
 			log.info("got roles for client `account`:");
@@ -58,7 +58,6 @@ public class App {
 				log.info("Role " + role);
 			}
 		}		
-		
-		
+
 	}
 }
