@@ -1,0 +1,12 @@
+package eu.organicity;
+
+import java.util.Base64;
+
+public class Config {
+
+	// Basic Auth token of the `Permission Component`
+	private static String user = "user";
+	private static String password = "password";
+	public static String basicAuth = Base64.getEncoder().encodeToString((user + ":" + password).getBytes()).toString();
+	
+}

@@ -3,9 +3,6 @@ package eu.organicity.accounts.permissions;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation.Builder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.client.ClientResponseContext;
 import javax.ws.rs.client.ClientRequestContext;
@@ -14,7 +11,6 @@ import io.jsonwebtoken.Claims;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Form;
 import javax.ws.rs.client.Entity;
@@ -65,8 +61,7 @@ public class Accounts
 
     c.register(
       new ClientResponseFilter() {
-        private Logger log = LoggerFactory.getLogger(
-          "permissions.request-log");
+        // private Logger log = LoggerFactory.getLogger("permissions.request-log");
 
         private String join(String sep, List<Object> el) {
           String resp = "";
@@ -498,7 +493,7 @@ public class Accounts
 
   private String authToken = null;
 
-  protected String getAuthToken()
+  public String getAuthToken()
   {
     this.refreshLoginIfRequired();
 

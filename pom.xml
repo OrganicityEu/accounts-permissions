@@ -12,7 +12,7 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <skipTests>true</skipTests>
+    <skipTests>false</skipTests>
   </properties>
 
 	<build>
@@ -53,12 +53,18 @@
       <scope>provided</scope>
     </dependency>
 
+	<dependency>
+	    <groupId>org.jboss.resteasy</groupId>
+	    <artifactId>resteasy-client</artifactId>
+	    <version>3.0.17.Final</version>
+	    <scope>test</scope>
+	</dependency>
+
     <dependency>
       <groupId>eu.organicity</groupId>
       <artifactId>java-jwt-parser</artifactId>
       <version>0.0.1-SNAPSHOT</version>
     </dependency>
-
 
     <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
     <dependency>
@@ -80,6 +86,13 @@
       <artifactId>json</artifactId>
       <version>20160212</version>
     </dependency>
+
+	<dependency>
+		<groupId>junit</groupId>
+		<artifactId>junit</artifactId>
+		<version>4.12</version>
+		<scope>test</scope>
+	</dependency>
 
   </dependencies>
 </project>
