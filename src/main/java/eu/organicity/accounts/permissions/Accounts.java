@@ -207,7 +207,7 @@ public class Accounts
    * @return The list of roles assigned to the user.
    */
   public List<String> getUserRoles(String userId) {
-    return this.getUserRoles(userId, null);
+    return this.getUserRoles(userId, null, false);
   }
 
   /**
@@ -221,62 +221,83 @@ public class Accounts
    */
   public List<String> getUserRoles(String userId, String clientName)
   {
-    // fetch realm-level role mappings of this user
-    Response res = this.getClient().
-      target(Accounts.baseUrl +
-        "realms/organicity/users/{id}/role-mappings/realm/composite").
-      resolveTemplate("id", userId).
-      request().
-      header("Authorization", "Bearer " + this.getAuthToken()).
-      buildGet().
-      invoke();
+    return this.getUserRoles(userId, clientName, false);
+  }
 
+  /**
+   * Determines the list of roles that are assigned to the given user.
+   * The list of roles returned depends on the third parameter onlyClient: If
+   * this value is false, all realm-level roles assigned to the userId are
+   * returned, and if a clientName is given, all roles specific to that client
+   * as well. If onlyClient is true, this call only returns permissions for
+   * clientName, or if clientName is null, no roles at all.
+   *
+   * @param userId The user id, as given by the "sub" field in the auth token.
+   * @param clientName The client for which roles are requested.
+   * @param onlyClient True if only client-level permissions should be returned.
+   * @return The list of roles assigned to the user.
+   */
+  public List<String> getUserRoles(String userId, String clientName, Boolean onlyClient)
+  {
     List<String> roles = new Vector<String>();
 
-    if (res.hasEntity()) {
-      String body = res.readEntity(String.class);
-      Accounts.log.trace("GetUserRoles: " + body);
+    if (!onlyClient) {
+      // fetch realm-level role mappings of this user
+      Response res = this.getClient().
+        target(Accounts.baseUrl +
+          "realms/organicity/users/{id}/role-mappings/realm/composite").
+        resolveTemplate("id", userId).
+        request().
+        header("Authorization", "Bearer " + this.getAuthToken()).
+        buildGet().
+        invoke();
 
-      if (res.getStatus() == 200) {
-        JSONArray roleMappings = new JSONArray(body);
+      if (res.hasEntity()) {
+        String body = res.readEntity(String.class);
+        Accounts.log.trace("GetUserRoles: " + body);
 
-        for(Object mappingObj : roleMappings) {
-          JSONObject mapping = (JSONObject)mappingObj;
+        if (res.getStatus() == 200) {
+          JSONArray roleMappings = new JSONArray(body);
 
-          if (mapping != null) {
-            String roleId = mapping.getString("id");
-            String roleName = mapping.getString("name");
+          for(Object mappingObj : roleMappings) {
+            JSONObject mapping = (JSONObject)mappingObj;
 
-            if (roleId != null && roleName != null) {
-              roles.add(roleName);
-              this.roleNameToId.put(roleName, roleId);
+            if (mapping != null) {
+              String roleId = mapping.getString("id");
+              String roleName = mapping.getString("name");
+
+              if (roleId != null && roleName != null) {
+                roles.add(roleName);
+                this.roleNameToId.put(roleName, roleId);
+              }
             }
           }
         }
+        else {
+          Accounts.log.warn("Could not read realm-level roles for user \"" +
+            userId + "\".");
+        }
       }
       else {
-        Accounts.log.warn("Could not read realm-level roles for user." +
-          userId);
+        Accounts.log.warn("Did not receive realm-level roles for user.");
+        return null;
       }
     }
-    else {
-      Accounts.log.warn("Did not receive realm-level roles for user.");
-      return null;
-    }
 
+    // if no client roles are requested, exit now.
     if (clientName == null) {
       return roles;
     }
 
     String clientId = this.getClientIdByName(clientName);
-
-    // if no client roles are requested, exit now.
     if (clientId == null) {
+      Accounts.log.warn("Could not get clientId for clientName \"" +
+        clientName + "\".");
       return roles;
     }
 
     // fetch role mappings for client
-    res = this.getClient().
+    Response res = this.getClient().
       target(Accounts.baseUrl +
         "realms/organicity/users/{id}/role-mappings/clients/{client}/composite").
       resolveTemplate("id", userId).
