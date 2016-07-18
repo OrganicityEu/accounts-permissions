@@ -337,7 +337,7 @@ public class Accounts
   }
 
 
-  private Boolean isRealmRole(String role)
+  public Boolean isRealmRole(String role)
   {
     // A role belongs to a realm if it does not contain a :
     return !role.contains(":");
