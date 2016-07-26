@@ -491,6 +491,89 @@ public class Accounts
   }
 
 
+  /**
+   * Queries for a list of user identifiers.
+   * This funtion returns users in a paginated way, that is, from the whole
+   * big list of all users, it returns the first 50 users. For more users after
+   * that, please use the parametrised versions of this function.
+   *
+   * @return A list of user identifier records.
+   */
+  public List<UserIdentifier> getUsers()
+  {
+    return this.getUsers(0, 50);
+  }
+
+  /**
+   * Queries for a list of user identifiers.
+   * This funtion returns users in a paginated way, that is, from the whole
+   * big list of all users, it skips the first <offset> users, and returns the
+   * next 50 users from there on.
+   *
+   * @param offset The offset in the list of users, i.e. the number of users
+   * to skip.
+   * @return A list of user identifier records.
+   */
+  public List<UserIdentifier> getUsers(int offset)
+  {
+    return this.getUsers(offset, 50);
+  }
+
+  /**
+   * Queries for a list of user identifiers.
+   * This funtion returns users in a paginated way, that is, from the whole
+   * big list of all users, it skips the first <offset> users, and returns the
+   * next <count> users from there on.
+   *
+   * @param offset The offset in the list of users, i.e. the number of users
+   * to skip.
+   * @param count The count of users to return, maxium of 50.
+   * @return A list of user identifier records, or `null` if the parameters are
+   * out of range.
+   */
+  public List<UserIdentifier> getUsers(int offset, int count)
+  {
+    List<UserIdentifier> users = new Vector<UserIdentifier>();
+
+    if (offset < 0 || count < 0 || count > 50) {
+      return null;
+    }
+
+    Response res = this.getClient().
+      target(Accounts.baseUrl + "realms/organicity/users").
+      queryParam("first", offset).
+      queryParam("max", count).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      buildGet().
+      invoke();
+
+    if (res.hasEntity() && res.getStatus() == 200)
+    {
+      String body = res.readEntity(String.class);
+      Accounts.log.trace("GetUsers: " + body);
+
+      JSONArray userList = new JSONArray(body);
+      for (Object userObj : userList) {
+        JSONObject user = (JSONObject)userObj;
+
+        if (user != null) {
+          users.add(
+            new UserIdentifier(user.getString("id"),
+              user.getString("username")));
+        }
+      }
+    }
+    else {
+      Accounts.log.warn("Could not fetch a list of users. (" + res.getStatus() +
+        ")");
+      return null;
+    }
+
+    return users;
+  }
+
+
   private String authToken = null;
 
   public String getAuthToken()
