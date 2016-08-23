@@ -535,7 +535,7 @@ public class Accounts
   {
     List<UserIdentifier> users = new Vector<UserIdentifier>();
 
-    if (offset < 0 || count < 0 || count > 50) {
+    if (offset < 0 || count <= 0 || count > 50) {
       return null;
     }
 
