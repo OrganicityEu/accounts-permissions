@@ -33,7 +33,10 @@ public class Accounts
 {
   private static Logger log = LoggerFactory.getLogger(Accounts.class);
 
-  private static String baseUrl = "https://accounts.organicity.eu/admin/";
+  //private static String host = "https://accounts.organicity.eu";
+  private static String host = "https://accounts.organicity.eu";
+  private static String baseUrl = host + "/admin/";
+  private static String tokenUrl = host +  "/realms/organicity/protocol/openid-connect/token";
 
   private Client client = null;
 
@@ -605,7 +608,7 @@ public class Accounts
     return a;
   }
 
-  protected String loginBasicAuth(String basicAuthString)
+  public String loginBasicAuth(String basicAuthString)
   {
     // Connects with the accounts-permissions service account.
     Accounts.log.info("Logging in with accounts-permissions.");
@@ -617,11 +620,7 @@ public class Accounts
 
     this.basicAuthString = basicAuthString;
 
-    String url = "https://accounts.organicity.eu/realms/organicity/" +
-      "protocol/openid-connect/token";
-
-
-    Response res = this.getClient().target(url).
+    Response res = this.getClient().target(Accounts.tokenUrl).
       request().
       header("Authorization", "Basic " + basicAuthString).
       buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
