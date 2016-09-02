@@ -43,7 +43,8 @@ public class Accounts
   //private static String host = "https://accounts.organicity.eu";
   private static String host = "https://accounts.organicity.eu";
   private static String baseUrl = host + "/admin/";
-  private static String tokenUrl = host +  "/realms/organicity/protocol/openid-connect/token";
+  private static String tokenUrl = host +
+    "/realms/organicity/protocol/openid-connect/token";
 
   private Client client = null;
 
@@ -74,8 +75,6 @@ public class Accounts
 
     c.register(
       new ClientResponseFilter() {
-        // private Logger log = LoggerFactory.getLogger("permissions.request-log");
-
         private String join(String sep, List<Object> el) {
           String resp = "";
 
@@ -121,7 +120,8 @@ public class Accounts
           if (reqEntity != null) {
             Accounts.log.trace("");
             if (reqEntity instanceof Form) {
-              Accounts.log.trace("Form: " + ((Form)reqEntity).asMap().toString());
+              Accounts.log.trace("Form: " +
+                ((Form)reqEntity).asMap().toString());
             }
             else {
               Accounts.log.trace(reqEntity.toString());
@@ -140,7 +140,8 @@ public class Accounts
 
           Accounts.log.trace("skip printing body...");
           // if (res.hasEntity()) {
-          //   Scanner s = new Scanner(res.getEntityStream()).useDelimiter("\\A");
+          //   Scanner s = new Scanner(res.getEntityStream()).
+          //     useDelimiter("\\A");
           //   String resEntity = s.hasNext() ? s.next() : "";
 
           //   Accounts.log.trace("");
@@ -245,7 +246,8 @@ public class Accounts
    * @param onlyClient True if only client-level permissions should be returned.
    * @return The list of roles assigned to the user.
    */
-  public List<String> getUserRoles(String userId, String clientName, Boolean onlyClient)
+  public List<String> getUserRoles(String userId, String clientName,
+    boolean onlyClient)
   {
     List<String> roles = new Vector<String>();
 
@@ -350,7 +352,7 @@ public class Accounts
   }
 
 
-  public Boolean isRealmRole(String role)
+  public boolean isRealmRole(String role)
   {
     // A role belongs to a realm if it does not contain a :
     return !role.contains(":");
@@ -464,10 +466,11 @@ public class Accounts
   /**
    * Assigns a role to a user.
    * @param userId The user id, as given by the subject field in the auth token.
-   * @param role the named role to be assigned to the user.
+   * @param role the named role to be assigned to the user. This role is always
+   * global, i.e. has no further specification (like e.g. an experiment).
    * @return true if the role has been successfully assigned.
    */
-  public Boolean setUserRole(String userId, String role)
+  public boolean setUserRole(String userId, String role)
   {
     String target = Accounts.baseUrl + (this.isRealmRole(role)
       ? "realms/organicity/users/{userId}/role-mappings/realm"
@@ -503,6 +506,99 @@ public class Accounts
     return res.getStatus() == 204;
   }
 
+
+  private String roleToLinearName(Role role)
+  {
+    String fullName = role.Name;
+
+    if (role.Experiment != null) {
+      fullName += "?experiment";
+    }
+
+    return fullName;
+  }
+
+  private String roleToConcreteName(Role role)
+  {
+    String fullName = role.Name;
+
+    if (role.Experiment != null) {
+      fullName += "?experiment=" + role.Experiment;
+    }
+
+    return fullName;
+  }
+
+  /**
+   * Assign a role to a user.
+   * @param userId The user id, as given by the subject field in the auth token.
+   * @param role The role to be assigned, potentially containing further
+   * dimensions to concretise the role.
+   * @return true if the role has been successfully assigned.
+   */
+  public boolean setUserRole(String userId, Role role)
+  {
+    String linearName = this.roleToLinearName(role);
+    String linearId = this.getRoleIdByName(linearName);
+    if (linearId == null) {
+      Accounts.log.warn("The role " + linearName + " does not exist.");
+      return false;
+    }
+
+    String concreteName = this.roleToConcreteName(role);
+    if (!this.isPlainRole(role)) {
+      String concreteId = this.getRoleIdByName(concreteName);
+      if (concreteId == null) {
+        if (!this.createRole(concreteName)) {
+          Accounts.log.warn("Could not create concrete role " + concreteName
+            + ".");
+          return false;
+        }
+      }
+    }
+
+    return this.setUserRole(userId, concreteName);
+  }
+
+  private boolean isPlainRole(Role role) {
+    return role.Experiment == null;
+  }
+
+  public boolean createRole(String role)
+  {
+    String target = Accounts.baseUrl + (this.isRealmRole(role)
+      ? "realms/organicity/roles"
+      : "realms/organicity/clients/{id}/roles");
+
+    String clientId = this.isRealmRole(role)
+      ? ""
+      : this.getClientIdByName(this.getClientOfRole(role));
+
+    if (clientId == null) {
+      Accounts.log.warn("Could not determine clientId for role " + role);
+      return false;
+    }
+
+    JSONObject jsonRole = new JSONObject().
+      put("name", this.getNameOfRole(role));
+
+    if (!this.roleNameToId.containsKey(role)) {
+      Response res = this.getClient().
+        target(target).
+        resolveTemplate("id", clientId).
+        request().
+        header("Authorization", "Bearer " + this.getAuthToken()).
+        buildPost(Entity.json(jsonRole.toString())).
+        invoke();
+
+      if (res.getStatus() != 200) {
+        Accounts.log.warn("Server unwilling to create role " + role + ".");
+        return false;
+      }
+    }
+
+    return true;
+  }
 
   /**
    * Queries for a list of user identifiers.
@@ -618,7 +714,7 @@ public class Accounts
     return a;
   }
 
-  public String loginBasicAuth(String basicAuthString)
+  protected String loginBasicAuth(String basicAuthString)
   {
     // Connects with the accounts-permissions service account.
 	  Accounts.log.info("Logging in with accounts-permissions.");
@@ -662,7 +758,7 @@ public class Accounts
     }
   }
 
-  public Boolean removeUserRole(String userId, String roleName)
+  public boolean removeUserRole(String userId, String roleName)
   {
     String target = Accounts.baseUrl + (this.isRealmRole(roleName)
       ? "realms/organicity/users/{userId}/role-mappings/realm"
@@ -674,7 +770,8 @@ public class Accounts
 
     String roleId = this.getRoleIdByName(roleName);
     if (roleId == null) {
-      Accounts.log.warn("could not remove role " + roleName + ", id not found.");
+      Accounts.log.warn(
+        "could not remove role " + roleName + ", id not found.");
       return false;
     }
 
