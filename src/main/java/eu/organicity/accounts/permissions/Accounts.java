@@ -1,26 +1,33 @@
 
 package eu.organicity.accounts.permissions;
 
+import java.io.IOException;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Vector;
+import java.util.WeakHashMap;
+
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.ClientResponseFilter;
-import javax.ws.rs.client.ClientResponseContext;
 import javax.ws.rs.client.ClientRequestContext;
+import javax.ws.rs.client.ClientResponseContext;
+import javax.ws.rs.client.ClientResponseFilter;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.core.Form;
+import javax.ws.rs.core.Response;
 
-import io.jsonwebtoken.Claims;
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.ClientProperties;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Form;
-import javax.ws.rs.client.Entity;
-import java.util.*;
-import java.io.IOException;
-
 import eu.organicity.JwtParser;
-
-import org.json.JSONObject;
-import org.json.JSONArray;
+import io.jsonwebtoken.Claims;
 
 
 /**
@@ -60,7 +67,10 @@ public class Accounts
 
   private Client createClient()
   {
-    Client c = ClientBuilder.newClient();
+    //Client c = ClientBuilder.newClient();
+	  ClientConfig config = new ClientConfig();
+	  config.property(ClientProperties.SUPPRESS_HTTP_COMPLIANCE_VALIDATION, true);
+	  Client c = ClientBuilder.newClient(config);	  
 
     c.register(
       new ClientResponseFilter() {
@@ -611,7 +621,7 @@ public class Accounts
   public String loginBasicAuth(String basicAuthString)
   {
     // Connects with the accounts-permissions service account.
-    Accounts.log.info("Logging in with accounts-permissions.");
+	  Accounts.log.info("Logging in with accounts-permissions.");
 
     if (basicAuthString == null) {
       Accounts.log.error("No auth token for login supplied. Canceling login.");
