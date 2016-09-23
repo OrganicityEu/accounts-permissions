@@ -68,10 +68,9 @@ public class Accounts
 
   private Client createClient()
   {
-    //Client c = ClientBuilder.newClient();
 	  ClientConfig config = new ClientConfig();
 	  config.property(ClientProperties.SUPPRESS_HTTP_COMPLIANCE_VALIDATION, true);
-	  Client c = ClientBuilder.newClient(config);	  
+	  Client c = ClientBuilder.newClient(config);
 
     c.register(
       new ClientResponseFilter() {
@@ -657,19 +656,25 @@ public class Accounts
       buildGet().
       invoke();
 
+    return this.getUsersFromResponse(res);
+  }
+
+  private List<UserIdentifier> getUsersFromResponse(Response res)
+  {
+    List<UserIdentifier> users = new Vector<UserIdentifier>();
+
     if (res.hasEntity() && res.getStatus() == 200)
     {
       String body = res.readEntity(String.class);
-      Accounts.log.trace("GetUsers: " + body);
+      Accounts.log.trace("GetUsersFromResponse: " + body);
 
       JSONArray userList = new JSONArray(body);
       for (Object userObj : userList) {
         JSONObject user = (JSONObject)userObj;
 
         if (user != null) {
-          users.add(
-            new UserIdentifier(user.getString("id"),
-              user.getString("username")));
+          users.add(new UserIdentifier(user.getString("id"),
+            user.getString("username")));
         }
       }
     }
@@ -717,7 +722,7 @@ public class Accounts
   protected String loginBasicAuth(String basicAuthString)
   {
     // Connects with the accounts-permissions service account.
-	  Accounts.log.info("Logging in with accounts-permissions.");
+    Accounts.log.info("Logging in with accounts-permissions.");
 
     if (basicAuthString == null) {
       Accounts.log.error("No auth token for login supplied. Canceling login.");
@@ -792,5 +797,24 @@ public class Accounts
       res.readEntity(String.class));
 
     return res.getStatus() == 204;
+  }
+
+  public UserIdentifier findUserByEmail(String email)
+  {
+    Response res = this.getClient().
+      target(Accounts.baseUrl + "realms/organicity/users").
+      queryParam("email", email).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      buildGet().
+      invoke();
+
+    List<UserIdentifier> users = this.getUsersFromResponse(res);
+    if (users != null && users.size() == 1) {
+      return users.get(0);
+    }
+    else {
+      return null;
+    }
   }
 }
