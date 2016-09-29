@@ -830,74 +830,89 @@ public class Accounts
     }
   }
 
-  public JSONObject registerClient(String client_name, String client_uri, String redirect_uri) {
+  public JSONObject registerClient(String client_name, String client_uri,
+    String redirect_uri)
+  {
+    JSONObject jsonClient = new JSONObject().
+      put("client_name", client_name).
+      put("client_uri", client_uri).
+      put("redirect_uris", new JSONArray().put(redirect_uri)).
+      put("grant_types", new JSONArray().put("authorization_code").put("refresh_token"));
 
-	  JSONObject jsonClient = new JSONObject().
-	  	put("client_name", client_name).
-	  	put("client_uri", client_uri).
-	  	put("redirect_uris",  new JSONArray().put(redirect_uri)).
-	  	put("grant_types",  new JSONArray().put("authorization_code").put("refresh_token"));
+    Accounts.log.debug("jsonClient: " + jsonClient.toString());
 
-	  Accounts.log.debug("jsonClient: " + jsonClient.toString());
+    String url = "https://accounts.organicity.eu/realms/organicity/clients-registrations/openid-connect";
 
-	  String url = "https://accounts.organicity.eu/realms/organicity/clients-registrations/openid-connect";
+    Response res = this.getClient().
+      target(url).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      header("Content-Type", "application/json").
+      header("Accept", "application/json").
+      method("POST", Entity.json(jsonClient.toString()));
 
-	  Response res = this.getClient().
-	      target(url).
-	      request().
-	      header("Authorization", "Bearer " + this.getAuthToken()).
-	      header("Content-Type", "application/json").
-	      header("Accept", "application/json").
-	      method("POST", Entity.json(jsonClient.toString()));
+    if (res.getStatus() == 201) {
+      Accounts.log.info("Client creation successful!");
 
-	  if (res.getStatus() == 201) {
-		  Accounts.log.info("Client creation successful!");
+      if (res.hasEntity()) {
+        String body = res.readEntity(String.class);
+        JSONObject reply = new JSONObject(body);
+        String client_id = reply.getString("client_id");
 
-		  if (res.hasEntity()) {
+        Accounts.log.debug("ClientID:" + client_id);
 
-			String body = res.readEntity(String.class);
-			JSONObject reply = new JSONObject(body);
-			String client_id = reply.getString("client_id");
+        String query = "select secret from CLIENT where client_id = '" + client_id + "';";
 
-			Accounts.log.debug("ClientID:" + client_id);
+        Accounts.log.debug("Query:" + query);
 
-			String query = "select secret from CLIENT where client_id = '" + client_id + "';"; 
-
-			Accounts.log.debug("Query:" + query);
-
-			Connection conn = null;
-			Statement stmt = null;
-			ResultSet rs = null;
-			try {
-				Accounts.log.debug("Load mysql driver");
-				Class.forName("com.mysql.jdbc.Driver").newInstance();
-				Accounts.log.debug("Connect to DB");
-				conn = DriverManager.getConnection(mysqlconfig.getConnectionUrl(), mysqlconfig.getConnectionUser(), mysqlconfig.getConnectionPassword());
-				stmt = conn.createStatement();
-				Accounts.log.debug("Execute Query");
-				rs = stmt.executeQuery(query);
-				if (rs.next()) {
-					Accounts.log.debug("FOUND!");
-					String secret = rs.getString("secret");
-					JSONObject json = new JSONObject().
-							put("client_id", client_id).
-							put("secret", secret);
-					Accounts.log.debug("Return JSON");
-					return json;
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-				Accounts.log.info("MySQL Error!");
-			} finally {
-				try { if (rs != null) rs.close(); } catch (SQLException e) { e.printStackTrace(); }
-				try { if (stmt != null) stmt.close(); } catch (SQLException e) { e.printStackTrace(); }
-				try { if (conn != null) conn.close(); } catch (SQLException e) { e.printStackTrace(); }
-			}
-		  }
-	  } else  {
-		  Accounts.log.info("Client creation failed with status code ", res.getStatus());
-	  }
-	  return null;
+        Connection conn = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+        try {
+          Accounts.log.debug("Load mysql driver");
+          Class.forName("com.mysql.jdbc.Driver").newInstance();
+          Accounts.log.debug("Connect to DB");
+          conn = DriverManager.getConnection(mysqlconfig.getConnectionUrl(),
+            mysqlconfig.getConnectionUser(),
+            mysqlconfig.getConnectionPassword());
+          stmt = conn.createStatement();
+          Accounts.log.debug("Execute Query");
+          rs = stmt.executeQuery(query);
+          if (rs.next()) {
+            Accounts.log.debug("FOUND!");
+            String secret = rs.getString("secret");
+            JSONObject json = new JSONObject().
+              put("client_id", client_id).
+              put("secret", secret);
+            Accounts.log.debug("Return JSON");
+            return json;
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
+          Accounts.log.info("MySQL Error!");
+        } finally {
+          try {
+            if (rs != null) rs.close();
+          } catch (SQLException e) {
+            e.printStackTrace();
+          }
+          try {
+            if (stmt != null) stmt.close();
+          } catch (SQLException e) {
+            e.printStackTrace();
+          }
+          try {
+            if (conn != null) conn.close();
+          } catch (SQLException e) {
+            e.printStackTrace();
+          }
+        }
+      }
+    }
+    else {
+      Accounts.log.info("Client creation failed with status code ", res.getStatus());
+    }
+    return null;
   }
   
 }
