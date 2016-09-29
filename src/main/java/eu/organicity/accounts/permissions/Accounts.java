@@ -478,9 +478,14 @@ public class Accounts
   public boolean setUserRole(String userId, String role)
   {
     String target = Accounts.baseUrl + (this.isRealmRole(role)
-      ? "realms/organicity/users/{userId}/role-mappings/realm"
-      : "realms/organicity/users/{userId}/role-mappings/clients/{client}");
+      ? "realms/organicity/users/{id}/role-mappings/realm"
+      : "realms/organicity/users/{id}/role-mappings/clients/{client}");
 
+    return this.setUserOrClientRole(target, userId, role);
+  }
+
+  private boolean setUserOrClientRole(String target, String id, String role)
+  {
     String clientId = this.isRealmRole(role)
       ? ""
       : this.getClientIdByName(this.getClientOfRole(role));
@@ -498,7 +503,7 @@ public class Accounts
 
     Response res = this.getClient().
       target(target).
-      resolveTemplate("userId", userId).
+      resolveTemplate("id", id).
       resolveTemplate("client", clientId).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
@@ -509,6 +514,21 @@ public class Accounts
       res.readEntity(String.class));
 
     return res.getStatus() == 204;
+  }
+
+  public boolean setClientScopeRole(String clientName, String role)
+  {
+    String target = Accounts.baseUrl + (this.isRealmRole(role)
+      ? "realms/organicity/clients/{id}/scope-mappings/realm"
+      : "realms/organicity/clients/{id}/scope-mappings/clients/{client}");
+
+    String clientId = this.getClientIdByName(clientName);
+    if (clientId == null) {
+      Accounts.log.error("setClientRole: Could not find clientId.");
+      return false;
+    }
+
+    return this.setUserOrClientRole(target, clientId, role);
   }
 
 
@@ -829,6 +849,26 @@ public class Accounts
       return null;
     }
   }
+
+  public boolean setFullScope(String clientName, boolean fullScope)
+  {
+    JSONObject clientJson = new JSONObject().
+      put("fullScopeAllowed", fullScope);
+
+    String clientId = this.getClientIdByName(clientName);
+
+    Response res = this.getClient().
+      target(Accounts.baseUrl + "realms/organicity/clients/{id}").
+      resolveTemplate("id", clientId).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      header("Content-Type", "application/json").
+      buildPut(Entity.json(clientJson.toString())).
+      invoke();
+
+    return res.getStatus() == 204;
+  }
+
 
   public JSONObject registerClient(String client_name, String client_uri,
     String redirect_uri)
