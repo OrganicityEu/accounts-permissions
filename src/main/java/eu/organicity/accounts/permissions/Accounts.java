@@ -855,6 +855,106 @@ public class Accounts
     JSONObject clientJson = new JSONObject().
       put("fullScopeAllowed", fullScope);
 
+    return this.updateClient(clientName, clientJson);
+  }
+
+  public List<String> getRedirectUris(String clientName)
+  {
+    String clientId = this.getClientIdByName(clientName);
+    JSONArray urisJson = this.getRedirectUrisJson(clientId);
+    Vector<String> uris = new Vector<String>();
+
+    if (urisJson == null) {
+      return null;
+    }
+
+    for(int i = 0; i < urisJson.length(); i++) {
+      uris.add(urisJson.getString(i));
+    }
+
+    return uris;
+  }
+
+  private JSONArray getRedirectUrisJson(String clientId)
+  {
+    Response res = this.getClient().
+      target(Accounts.baseUrl + "realms/organicity/clients/{id}").
+      resolveTemplate("id", clientId).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      header("Accept", "application/json").
+      buildGet().
+      invoke();
+
+    if (res.hasEntity()) {
+      String body = res.readEntity(String.class);
+      Accounts.log.info("Reply: " + res.getStatus());
+      Accounts.log.trace("Body: " + body);
+
+      if (res.getStatus() == 200) {
+        JSONObject reply = new JSONObject(body);
+        return reply.getJSONArray("redirectUris");
+      }
+      else {
+        Accounts.log.warn("Fetching request URIs was not successful. Reply: HTTP " +
+          res.getStatus());
+        Accounts.log.warn("Body: " + body);
+        return null;
+      }
+    }
+    else {
+      Accounts.log.trace("get redirect uris has no content (Status: " +
+        res.getStatus() + ").");
+      return null;
+    }
+  }
+
+  public boolean addRedirectUri(String clientName, String newUri)
+  {
+    String clientId = this.getClientIdByName(clientName);
+
+    JSONArray uris = this.getRedirectUrisJson(clientId);
+    if (uris == null) {
+      uris = new JSONArray();
+    }
+
+    JSONObject newUrlJson = new JSONObject().
+      put("redirectUris", uris.
+        put(newUri));
+
+    return this.updateClient(clientName, newUrlJson);
+  }
+
+  public boolean removeRedirectUri(String clientName, String oldUri)
+  {
+    String clientId = this.getClientIdByName(clientName);
+
+    JSONArray uris = this.getRedirectUrisJson(clientId);
+    if (uris == null) {
+      return false;
+    }
+
+    boolean foundUri = false;
+
+    for(int i = 0; i < uris.length(); i++) {
+      if (uris.getString(i).equals(oldUri)) {
+        uris.remove(i);
+        foundUri = true;
+        break;
+      }
+    }
+
+    if (!foundUri) {
+      return false;
+    }
+
+    JSONObject clientUpdate = new JSONObject().
+      put("redirectUris", uris);
+
+    return this.updateClient(clientName, clientUpdate);
+  }
+
+  private boolean updateClient(String clientName, JSONObject clientJson) {
     String clientId = this.getClientIdByName(clientName);
 
     Response res = this.getClient().
