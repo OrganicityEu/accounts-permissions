@@ -877,6 +877,14 @@ public class Accounts
 
   private JSONArray getRedirectUrisJson(String clientId)
   {
+    JSONObject body = this.getClientDescription(clientId);
+    return body != null
+      ? body.getJSONArray("redirectUris")
+      : null;
+  }
+
+  private JSONObject getClientDescription(String clientId)
+  {
     Response res = this.getClient().
       target(Accounts.baseUrl + "realms/organicity/clients/{id}").
       resolveTemplate("id", clientId).
@@ -892,8 +900,7 @@ public class Accounts
       Accounts.log.trace("Body: " + body);
 
       if (res.getStatus() == 200) {
-        JSONObject reply = new JSONObject(body);
-        return reply.getJSONArray("redirectUris");
+        return new JSONObject(body);
       }
       else {
         Accounts.log.warn("Fetching request URIs was not successful. Reply: HTTP " +
@@ -969,6 +976,34 @@ public class Accounts
     return res.getStatus() == 204;
   }
 
+
+  public boolean IsImplicitFlowEnabled(String clientName)
+  {
+    String clientId = this.getClientIdByName(clientName);
+    JSONObject desc = this.getClientDescription(clientId);
+    return desc != null && desc.getBoolean("implicitFlowEnabled");
+  }
+
+  public boolean IsAuthCodeFlowEnabled(String clientName)
+  {
+    String clientId = this.getClientIdByName(clientName);
+    JSONObject desc = this.getClientDescription(clientId);
+    return desc != null && desc.getBoolean("standardFlowEnabled");
+  }
+
+  public boolean SetImplicitFlowEnabled(String clientName, boolean enabled)
+  {
+    JSONObject clientUpdate = new JSONObject().
+      put("implicitFlowEnabled", enabled);
+    return this.updateClient(clientName, clientUpdate);
+  }
+
+  public boolean SetAuthCodeFlowEnabled(String clientName, boolean enabled)
+  {
+    JSONObject clientUpdate = new JSONObject().
+      put("standardFlowEnabled", enabled);
+    return this.updateClient(clientName, clientUpdate);
+  }
 
   public JSONObject registerClient(String client_name, String client_uri,
     String redirect_uri)
@@ -1054,5 +1089,4 @@ public class Accounts
     }
     return null;
   }
-  
 }
