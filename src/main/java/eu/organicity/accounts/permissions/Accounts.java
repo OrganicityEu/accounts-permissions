@@ -683,6 +683,23 @@ public class Accounts
     return this.getUsersFromResponse(res);
   }
 
+  public UserIdentifier getUserById(String id)
+  {
+    Response res = this.getClient().
+      target(Accounts.baseUrl + "realms/organicity/users/" + id).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      buildGet().
+      invoke();
+
+    if (res.hasEntity() && res.getStatus() == 200)
+    {
+      String body = res.readEntity(String.class);
+      return new UserIdentifier(new JSONObject(body));
+    }
+    return null;
+  }
+
   private List<UserIdentifier> getUsersFromResponse(Response res)
   {
     List<UserIdentifier> users = new Vector<UserIdentifier>();
@@ -697,8 +714,7 @@ public class Accounts
         JSONObject user = (JSONObject)userObj;
 
         if (user != null) {
-          users.add(new UserIdentifier(user.getString("id"),
-            user.getString("username")));
+          users.add(new UserIdentifier(user));
         }
       }
     }
