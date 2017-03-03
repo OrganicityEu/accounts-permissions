@@ -12,11 +12,22 @@ public class UserIdentifier
 
   protected UserIdentifier(JSONObject json)
   {
-	  this.id = json.getString("id");
-	  this.name = json.getString("username");
-	  this.lastName = json.getString("lastName");
-	  this.firstName = json.getString("firstName");
-	  this.email = json.getString("email");
+	  System.out.println("JSON:" + json);
+	  if(json.has("id")) {
+		  this.id = json.getString("id");
+	  }
+	  if(json.has("username")) {
+		  this.name = json.getString("username");
+	  }
+	  if(json.has("lastName")) {
+		  this.lastName = json.getString("lastName");
+	  }
+	  if(json.has("firstName")) {
+		  this.firstName = json.getString("firstName");
+	  }
+	  if(json.has("email")) {
+		  this.email = json.getString("email");
+	  }
   }
 
   public String getId()
