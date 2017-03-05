@@ -685,6 +685,15 @@ public class Accounts
 
   public UserIdentifier getUserById(String id)
   {
+	JSONObject jsonUser = getUserByIdJSON(id);
+	if(jsonUser == null) {
+		return null;
+	}
+    return new UserIdentifier(jsonUser);
+  }
+
+  private JSONObject getUserByIdJSON(String id)
+  {
     Response res = this.getClient().
       target(Accounts.baseUrl + "realms/organicity/users/" + id).
       request().
@@ -695,14 +704,76 @@ public class Accounts
     if (res.hasEntity() && res.getStatus() == 200)
     {
       String body = res.readEntity(String.class);
-      return new UserIdentifier(new JSONObject(body));
+      return new JSONObject(body);
     }
     return null;
   }
 
+  public void updateUserById(String id, UserIdentifier ui) throws Exception
+  {
+	// Get the user as KeyCloak JSON-format
+	JSONObject jsonUser = getUserByIdJSON(id);
+	if(jsonUser == null) {
+		System.out.println("ERROR 1");
+	    throw new Exception("User cannot be found!");
+	}
+
+	if(id == null || !id.equals(ui.getId())) {
+		System.out.println("ERROR 2");
+		throw new Exception("Given id and id inside JSON are not the same.");
+	}
+
+	// Modify the JSON
+	jsonUser.put("email", ui.getEmail());
+	jsonUser.put("firstName", ui.getFirstName());
+	jsonUser.put("lastName", ui.getLastName());
+	jsonUser.put("username", ui.getName());
+
+	// Update the user with the modified JSON
+    Response res = this.getClient().
+      target(Accounts.baseUrl + "realms/organicity/users/" + id).
+      request().
+      header("Authorization", "Bearer " + this.getAuthToken()).
+      buildPut(Entity.json(jsonUser.toString())).
+      invoke();
+
+    if (res.getStatus() == 204) {
+    	Accounts.log.info("User update successful!");
+    } else {
+    	Accounts.log.error("User update fails!");
+		System.out.println("ERROR 3");
+    	if (res.hasEntity())
+    	{
+    		String body = res.readEntity(String.class);
+    		JSONObject error = new JSONObject(body);
+    		if(error.has("errorMessage")) {
+    			throw new Exception(error.getString("errorMessage"));
+    		} else {
+    			throw new Exception("Unknown error");
+    		}
+    	}
+    }
+  }
+
   private List<UserIdentifier> getUsersFromResponse(Response res)
   {
-    List<UserIdentifier> users = new Vector<UserIdentifier>();
+	  List<JSONObject> usersJson = getUsersFromResponseAsJson(res);
+	  if(usersJson == null) {
+		  return null;
+	  }
+
+	  // Convert from JSONObject to UserIdentifier
+	  List<UserIdentifier> users = new Vector<UserIdentifier>();
+	  for (JSONObject user : usersJson) {
+		  users.add(new UserIdentifier(user));
+	  }
+
+	  return users;
+  }
+
+  private List<JSONObject> getUsersFromResponseAsJson(Response res)
+  {
+    List<JSONObject> users = new Vector<JSONObject>();
 
     if (res.hasEntity() && res.getStatus() == 200)
     {
@@ -714,7 +785,7 @@ public class Accounts
         JSONObject user = (JSONObject)userObj;
 
         if (user != null) {
-          users.add(new UserIdentifier(user));
+          users.add(user);
         }
       }
     }
@@ -726,7 +797,8 @@ public class Accounts
 
     return users;
   }
-
+  
+  
 
   private String authToken = null;
 

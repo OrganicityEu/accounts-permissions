@@ -10,9 +10,11 @@ public class UserIdentifier
   private String lastName;
   private String email;
 
-  protected UserIdentifier(JSONObject json)
+  public UserIdentifier() {}
+
+  public UserIdentifier(JSONObject json)
   {
-	  System.out.println("JSON:" + json);
+	  //System.out.println("JSON:" + json);
 	  if(json.has("id")) {
 		  this.id = json.getString("id");
 	  }
@@ -30,25 +32,44 @@ public class UserIdentifier
 	  }
   }
 
-  public String getId()
-  {
+  public String getId() {
     return this.id;
+  }
+
+  public void setId(String id) {
+	this.id = id;
   }
 
   public String getName() {
 	return name;
   }
 
+  public void setName(String name) {
+	this.name = name;
+  }
+
   public String getFirstName() {
 	return firstName;
+  }
+
+  public void setFirstName(String firstName) {
+	this.firstName = firstName;
   }
 
   public String getLastName() {
 	return lastName;
   }
 
+  public void setLastName(String lastName) {
+	this.lastName = lastName;
+  }
+
   public String getEmail() {
 	return email;
+  }
+
+  public void setEmail(String email) {
+	this.email = email;
   }
 
   @Override
