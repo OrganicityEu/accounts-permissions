@@ -10,11 +10,15 @@ import java.sql.Statement;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 import java.util.WeakHashMap;
 
+import javax.ws.rs.BadRequestException;
+import javax.ws.rs.InternalServerErrorException;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.ClientRequestContext;
@@ -23,6 +27,7 @@ import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Form;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.client.ClientProperties;
@@ -167,7 +172,7 @@ public class Accounts
    */
   private void refreshLoginIfRequired()
   {
-    String token = this.authToken;
+    String token = this.getAuthToken();
     if (token == null) {
       this.refreshLogin();
       return;
@@ -193,8 +198,7 @@ public class Accounts
     Date expires = null;
     expires = c.getExpiration();
 
-    Accounts.log.trace("Token Expiration check: Token expires " +
-      expires.toString());
+    Accounts.log.trace("Token Expiration check: Token expires at " + expires.toString());
 
     if (expires != null && expires.before(in30seconds.getTime())) {
       this.refreshLogin();
@@ -799,22 +803,19 @@ public class Accounts
   }
   
   
-
-  private String authToken = null;
-
   public String getAuthToken()
   {
     this.refreshLoginIfRequired();
 
-    if (this.authToken == null) {
+    if (Accounts.token == null) {
       throw new Error("Accounts cannot login, no Authentication Token could " +
         "be acquired.");
     }
-
-    return this.authToken;
+    return Accounts.token;
   }
 
   private String basicAuthString = null;
+  public static String token = null;
 
   /**
    * Greates a new Organicity Accounts interface which performs login using
@@ -841,46 +842,46 @@ public class Accounts
 
   protected String loginBasicAuth(String basicAuthString)
   {
-    // Connects with the accounts-permissions service account.
-    Accounts.log.info("Logging in with accounts-permissions.");
-
-    if (basicAuthString == null) {
-      Accounts.log.error("No auth token for login supplied. Canceling login.");
-      return null;
-    }
-
-    this.basicAuthString = basicAuthString;
-
-    Response res = this.getClient().target(Accounts.tokenUrl).
-      request().
-      header("Authorization", "Basic " + basicAuthString).
-      buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
-      invoke();
-
-
-    if (res.hasEntity()) {
-      String body = res.readEntity(String.class);
-      Accounts.log.info("Reply: " + res.getStatus());
-      Accounts.log.trace("Body: " + body);
-
-      if (res.getStatus() == 200) {
-        JSONObject reply = new JSONObject(body);
-        String token = reply.getString("access_token");
-        Accounts.log.trace("token: " + token);
-        this.authToken = token;
-        return token;
-      }
-      else {
-        Accounts.log.warn("login was not successful. Reply: HTTP " +
-          res.getStatus());
-        Accounts.log.warn("Body: " + body);
-        return null;
-      }
-    }
-    else {
-      Accounts.log.trace("login reply has no content.");
-      return null;
-    }
+	// Connects with the accounts-permissions service account.
+	Accounts.log.info("Logging in with accounts-permissions.");
+	
+	if (basicAuthString == null) {
+		Accounts.log.error("No auth token for login supplied. Canceling login.");
+		return null;
+	}
+	
+	this.basicAuthString = basicAuthString;
+	
+	Response res = this.getClient().target(Accounts.tokenUrl).
+			request().
+			header("Authorization", "Basic " + basicAuthString).
+			buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
+			invoke();
+	
+	
+	if (res.hasEntity()) {
+		String body = res.readEntity(String.class);
+		Accounts.log.info("Reply: " + res.getStatus());
+		Accounts.log.trace("Body: " + body);
+		
+		if (res.getStatus() == 200) {
+			JSONObject reply = new JSONObject(body);
+			String token = reply.getString("access_token");
+			Accounts.log.trace("token: " + token);
+			Accounts.token = token;
+			return token;
+		}
+		else {
+			Accounts.log.warn("login was not successful. Reply: HTTP " +
+					res.getStatus());
+			Accounts.log.warn("Body: " + body);
+			return null;
+		}
+	}
+	else {
+		Accounts.log.trace("login reply has no content.");
+		return null;
+	}
   }
 
   public boolean removeUserRole(String userId, String roleName)
@@ -1093,6 +1094,7 @@ public class Accounts
     return this.updateClient(clientName, clientUpdate);
   }
 
+  @Deprecated
   public JSONObject registerClient(String client_name, String client_uri,
     String redirect_uri)
   {
@@ -1177,4 +1179,266 @@ public class Accounts
     }
     return null;
   }
+
+  public JSONObject getClient(String clientId, boolean getSecret) {
+	  
+	  System.out.println("Get client with clientId " + clientId);
+	  
+	  String id = getClientIdByName(clientId);
+	  if(id == null) {
+		  throw new NotFoundException("Client with id " + clientId + " not found!");
+	  }
+	  
+	  // Get the id belonging to the client
+	  Response res3 = this.getClient().
+	      target(Accounts.baseUrl + "realms/organicity/clients/{id}/service-account-user").
+	      resolveTemplate("id", id).
+	      request().
+	      header("Authorization", "Bearer " + this.getAuthToken()).
+	      header("Accept", "application/json").
+	      buildGet().
+	      invoke();
+	  
+	  System.out.println("REQ OK");
+	  
+	  String clientSub = null;
+	  if (res3.getStatus() == 200) {				
+		  Accounts.log.info("Got the Service account id (sub of the client!)");
+		  
+		  String body = res3.readEntity(String.class);
+		  Accounts.log.info("Reply: " + res3.getStatus());
+		  Accounts.log.info("Body: " + body);
+		  JSONObject reply = new JSONObject(body);
+		  clientSub = reply.getString("id");
+	  } else {
+		  throw new NotFoundException("Cannot find the given client id " + clientId);
+	  }
+
+      JSONObject json = new JSONObject().
+          put("client_id", clientId).
+          put("sub", clientSub);
+      
+      if(getSecret) {
+    	  String secret = getClientSecret(clientId);
+    	  json.put("secret", secret);
+      }
+      
+      return json;
+  }
+
+  //file:///home/boldt/Schreibtisch/KeyCloak/Keycloak%20Admin%20REST%20API.html#_delete_the_client
+  
+  public boolean deleteClient(String clientId) {
+	  
+	  System.out.println("Delete client with clientId " + clientId);
+	  
+	  String id = getClientIdByName(clientId);
+	  if(id == null) {
+		  throw new NotFoundException("Client with id " + clientId + " not found!");
+	  }
+	  
+	  // Get the id belonging to the client
+	  Response res3 = this.getClient().
+	      target(Accounts.baseUrl + "realms/organicity/clients/{id}").
+	      resolveTemplate("id", id).
+	      request().
+	      header("Authorization", "Bearer " + this.getAuthToken()).
+	      buildDelete().
+	      invoke();
+	  
+	  System.out.println("Status: " + res3.getStatus());
+	  
+	  if (res3.getStatus() == Status.NO_CONTENT.getStatusCode()) {
+		  return true;
+	  } else {
+		  throw new InternalServerErrorException("Unknown status code: " + res3.getStatus());
+	  }
+
+  }
+
+  
+  public JSONObject registerClient(String clientId, String[] roles, boolean getSecret) {
+
+	  JSONObject clientJson = new JSONObject().
+	      put("clientId", clientId).
+	      put("enabled", true).
+	      put("serviceAccountsEnabled", true).
+	      put("standardFlowEnabled", true).
+	      put("clientAuthenticatorType", "confidential").
+	      put("directAccessGrantsEnabled", false).
+	      put("protocol", "openid-connect");
+
+	  Response res = this.getClient().
+	      target(Accounts.baseUrl + "realms/organicity/clients").
+	      request().
+	      header("Authorization", "Bearer " + this.getAuthToken()).
+	      header("Content-Type", "application/json").
+	      buildPost(Entity.json(clientJson.toString())).
+	      invoke();
+
+	  System.out.println("Status for client creation: " + res.getStatus());
+	  
+	  // New client created
+	  if(res.getStatus() == Status.CREATED.getStatusCode()) {
+
+		  Accounts.log.info("CLIENT CREATED");
+		  
+		  // Get the id belonging to the client
+		  Response res3 = this.getClient().
+		      target(Accounts.baseUrl + "realms/organicity/clients/{id}/service-account-user").
+		      resolveTemplate("id", getClientIdByName(clientId)).
+		      request().
+		      header("Authorization", "Bearer " + this.getAuthToken()).
+		      header("Accept", "application/json").
+		      buildGet().
+		      invoke();
+		  
+		  String clientSub = null;
+		  if (res3.getStatus() == 200) {				
+			  Accounts.log.info("Got the Service account id (sub of the client!)");
+			  
+			  String body = res3.readEntity(String.class);
+			  Accounts.log.info("Reply: " + res3.getStatus());
+			  Accounts.log.info("Body: " + body);
+			  JSONObject reply = new JSONObject(body);
+			  clientSub = reply.getString("id");
+		  } else {
+			  throw new InternalServerErrorException("Cannot find client id of just created client!");
+		  }
+		  
+		  if(roles.length > 0) {
+			  for (String role : roles) {
+				  // Role does not exists!
+				  if(!this.setUserRole(clientSub, role)) {
+					  // Do the rollback and throw an exception
+					  this.deleteClient(clientId);
+					  throw new BadRequestException("Client canot be not created. The role " + role + " is unknown.");
+				  } 
+			  }
+		  }
+
+          JSONObject json = new JSONObject().
+              put("client_id", clientId).
+              put("sub", clientSub);
+
+          // Ass secret, if allowed!
+          if(getSecret) {
+        	  try {
+        		  String secret = getClientSecret(clientId);
+        		  json.put("secret", secret);
+        	  } catch (InternalServerErrorException e) {
+				  this.deleteClient(clientId);
+				  throw e;
+        	  }
+          }
+          
+          return json;
+
+	  } else if(res.getStatus() == Status.CONFLICT.getStatusCode()){
+		  throw new BadRequestException("ClientID already used");
+	  } else {
+		  System.out.println("STATUS: " + res.getStatus());
+		  throw new InternalServerErrorException("Unkown Error");
+	  }
+  }
+  
+  private String getClientSecret(String clientId) throws InternalServerErrorException {
+
+      String query = "select secret from CLIENT where client_id = '" + clientId + "';";
+      Accounts.log.debug("Query:" + query);
+	  
+      Connection conn = null;
+      Statement stmt = null;
+      ResultSet rs = null;
+      try {
+        Accounts.log.debug("Load mysql driver");
+        Class.forName("com.mysql.jdbc.Driver").newInstance();
+        Accounts.log.debug("Connect to DB");
+        conn = DriverManager.getConnection(mysqlconfig.getConnectionUrl(),
+          mysqlconfig.getConnectionUser(),
+          mysqlconfig.getConnectionPassword());
+        stmt = conn.createStatement();
+        Accounts.log.debug("Execute Query");
+        rs = stmt.executeQuery(query);
+        if (rs.next()) {
+          Accounts.log.debug("FOUND!");
+          return rs.getString("secret");
+        }
+      } catch (Exception e) {
+        e.printStackTrace();
+        Accounts.log.info("MySQL Error!");
+        throw new InternalServerErrorException(e);
+      } finally {
+        try {
+          if (rs != null) rs.close();
+        } catch (SQLException e) {
+          e.printStackTrace();
+	        throw new InternalServerErrorException(e);
+        }
+        try {
+          if (stmt != null) stmt.close();
+        } catch (SQLException e) {
+          e.printStackTrace();
+	        throw new InternalServerErrorException(e);
+        }
+        try {
+          if (conn != null) conn.close();
+        } catch (SQLException e) {
+          e.printStackTrace();
+	        throw new InternalServerErrorException(e);
+        }
+      }	  
+      throw new InternalServerErrorException("Unknown error");
+  }
+  
+  public List<String> getSubsPerRole(String role) throws InternalServerErrorException {
+
+	  String query = "SELECT user_id FROM KEYCLOAK_ROLE kr JOIN USER_ROLE_MAPPING rm ON kr.id = rm.role_id JOIN USER_ENTITY ue ON rm.user_id = ue.id WHERE kr.name = '" + role + "';";
+      Accounts.log.debug("Query:" + query);
+	  
+      Connection conn = null;
+      Statement stmt = null;
+      ResultSet rs = null;
+      try {
+        Accounts.log.debug("Load mysql driver");
+        Class.forName("com.mysql.jdbc.Driver").newInstance();
+        Accounts.log.debug("Connect to DB");
+        conn = DriverManager.getConnection(mysqlconfig.getConnectionUrl(),
+          mysqlconfig.getConnectionUser(),
+          mysqlconfig.getConnectionPassword());
+        stmt = conn.createStatement();
+        Accounts.log.debug("Execute Query");
+        rs = stmt.executeQuery(query);
+        List<String> result = new LinkedList<>();
+        while (rs.next()) {
+          //Accounts.log.debug("FOUND!");
+          result.add(rs.getString("user_id"));
+        }
+        return result;
+      } catch (Exception e) {
+        e.printStackTrace();
+        Accounts.log.info("MySQL Error!");
+        throw new InternalServerErrorException(e);
+      } finally {
+        try {
+          if (rs != null) rs.close();
+        } catch (SQLException e) {
+          e.printStackTrace();
+	        throw new InternalServerErrorException(e);
+        }
+        try {
+          if (stmt != null) stmt.close();
+        } catch (SQLException e) {
+          e.printStackTrace();
+	        throw new InternalServerErrorException(e);
+        }
+        try {
+          if (conn != null) conn.close();
+        } catch (SQLException e) {
+          e.printStackTrace();
+	        throw new InternalServerErrorException(e);
+        }
+      }	  
+  }  
+  
 }
