@@ -53,8 +53,8 @@ public class Accounts
   //private static String host = "https://accounts.organicity.eu";
   private static String host = "https://accounts.organicity.eu";
   private static String baseUrl = host + "/admin/";
-  private static String tokenUrl = host +
-    "/realms/organicity/protocol/openid-connect/token";
+  private static String realm = "organicity";
+  private static String tokenUrl = host + "/realms/{realm}/protocol/openid-connect/token";
 
   private Client client = null;
   private MySqlConfig mysqlconfig = null;
@@ -172,8 +172,9 @@ public class Accounts
    */
   private void refreshLoginIfRequired()
   {
-    String token = this.getAuthToken();
+    String token = Accounts.token;
     if (token == null) {
+      Accounts.log.debug("Token null. Get a new token!");
       this.refreshLogin();
       return;
     }
@@ -183,6 +184,7 @@ public class Accounts
       c = (new JwtParser()).parseJWT(token);
     }
     catch (Exception e) {
+      Accounts.log.debug(e.getMessage() + ". Get a new token!");
       this.refreshLogin();
       return;
     }
@@ -198,10 +200,11 @@ public class Accounts
     Date expires = null;
     expires = c.getExpiration();
 
-    Accounts.log.trace("Token Expiration check: Token expires at " + expires.toString());
-
     if (expires != null && expires.before(in30seconds.getTime())) {
+      Accounts.log.debug("Token expired. Get a new token!");
       this.refreshLogin();
+    } else {
+    	Accounts.log.debug("Token valid. Expires at " + expires.toString());
     }
   }
 
@@ -262,18 +265,23 @@ public class Accounts
 
     if (!onlyClient) {
       // fetch realm-level role mappings of this user
+      Accounts.log.debug("fetch realm-level role mappings - START");
+
       Response res = this.getClient().
         target(Accounts.baseUrl +
-          "realms/organicity/users/{id}/role-mappings/realm/composite").
+          "realms/{realm}/users/{id}/role-mappings/realm/composite").
+        resolveTemplate("realm", realm).
         resolveTemplate("id", userId).
         request().
         header("Authorization", "Bearer " + this.getAuthToken()).
         buildGet().
         invoke();
 
+      Accounts.log.debug("fetch realm-level role mappings - END");
+
       if (res.hasEntity()) {
         String body = res.readEntity(String.class);
-        Accounts.log.trace("GetUserRoles: " + body);
+        Accounts.log.debug("GetUserRoles: " + body);
 
         if (res.getStatus() == 200) {
           JSONArray roleMappings = new JSONArray(body);
@@ -315,10 +323,13 @@ public class Accounts
       return roles;
     }
 
+    Accounts.log.debug("Get role mapping");
+
     // fetch role mappings for client
     Response res = this.getClient().
       target(Accounts.baseUrl +
-        "realms/organicity/users/{id}/role-mappings/clients/{client}/composite").
+        "realms/{realm}/users/{id}/role-mappings/clients/{client}/composite").
+      resolveTemplate("realm", realm).
       resolveTemplate("id", userId).
       resolveTemplate("client", clientId).
       request().
@@ -389,9 +400,12 @@ public class Accounts
 
   private String getClientIdByName(String clientId)
   {
+	Accounts.log.debug("getClientIdByName");
+
     if (!this.clientNameToId.containsKey(clientId)) {
       Response res = this.getClient().
-        target(Accounts.baseUrl + "realms/organicity/clients").
+        target(Accounts.baseUrl + "realms/{realm}/clients").
+        resolveTemplate("realm", realm).
         resolveTemplate("id", clientId).
         request().
         header("Authorization", "Bearer " + this.getAuthToken()).
@@ -427,8 +441,8 @@ public class Accounts
   private String getRoleIdByName(String roleName)
   {
     String target = Accounts.baseUrl + (this.isRealmRole(roleName)
-      ? "realms/organicity/roles/{role-name}"
-      : "realms/organicity/clients/{id}/roles/{role-name}");
+      ? "realms/{realm}/roles/{role-name}"
+      : "realms/{realm}/clients/{id}/roles/{role-name}");
 
     String clientId = this.isRealmRole(roleName)
       ? ""
@@ -442,6 +456,7 @@ public class Accounts
     if (!this.roleNameToId.containsKey(roleName)) {
       Response res = this.getClient().
         target(target).
+        resolveTemplate("realm", realm).
         resolveTemplate("id", clientId).
         resolveTemplate("role-name", this.getNameOfRole(roleName)).
         request().
@@ -507,6 +522,7 @@ public class Accounts
 
     Response res = this.getClient().
       target(target).
+      resolveTemplate("realm", realm).
       resolveTemplate("id", id).
       resolveTemplate("client", clientId).
       request().
@@ -523,8 +539,8 @@ public class Accounts
   public boolean setClientScopeRole(String clientName, String role)
   {
     String target = Accounts.baseUrl + (this.isRealmRole(role)
-      ? "realms/organicity/clients/{id}/scope-mappings/realm"
-      : "realms/organicity/clients/{id}/scope-mappings/clients/{client}");
+      ? "realms/{realm}/clients/{id}/scope-mappings/realm"
+      : "realms/{realm}/clients/{id}/scope-mappings/clients/{client}");
 
     String clientId = this.getClientIdByName(clientName);
     if (clientId == null) {
@@ -596,8 +612,8 @@ public class Accounts
   public boolean createRole(String role)
   {
     String target = Accounts.baseUrl + (this.isRealmRole(role)
-      ? "realms/organicity/roles"
-      : "realms/organicity/clients/{id}/roles");
+      ? "realms/{realm}/roles"
+      : "realms/{realm}/clients/{id}/roles");
 
     String clientId = this.isRealmRole(role)
       ? ""
@@ -614,6 +630,7 @@ public class Accounts
     if (!this.roleNameToId.containsKey(role)) {
       Response res = this.getClient().
         target(target).
+        resolveTemplate("realm", realm).
         resolveTemplate("id", clientId).
         request().
         header("Authorization", "Bearer " + this.getAuthToken()).
@@ -676,7 +693,8 @@ public class Accounts
     }
 
     Response res = this.getClient().
-      target(Accounts.baseUrl + "realms/organicity/users").
+      target(Accounts.baseUrl + "realms/{realm}/users").
+      resolveTemplate("realm", realm).
       queryParam("first", offset).
       queryParam("max", count).
       request().
@@ -699,7 +717,8 @@ public class Accounts
   private JSONObject getUserByIdJSON(String id)
   {
     Response res = this.getClient().
-      target(Accounts.baseUrl + "realms/organicity/users/" + id).
+      target(Accounts.baseUrl + "realms/{realm}/users/" + id).
+      resolveTemplate("realm", realm).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
       buildGet().
@@ -735,7 +754,8 @@ public class Accounts
 
 	// Update the user with the modified JSON
     Response res = this.getClient().
-      target(Accounts.baseUrl + "realms/organicity/users/" + id).
+      target(Accounts.baseUrl + "realms/{realm}/users/" + id).
+      resolveTemplate("realm", realm).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
       buildPut(Entity.json(jsonUser.toString())).
@@ -840,23 +860,25 @@ public class Accounts
     return a;
   }
 
-  protected String loginBasicAuth(String basicAuthString)
+  protected void loginBasicAuth(String basicAuthString)
   {
 	// Connects with the accounts-permissions service account.
 	Accounts.log.info("Logging in with accounts-permissions.");
 	
 	if (basicAuthString == null) {
 		Accounts.log.error("No auth token for login supplied. Canceling login.");
-		return null;
+		Accounts.token = null;
+		return;
 	}
 	
 	this.basicAuthString = basicAuthString;
 	
 	Response res = this.getClient().target(Accounts.tokenUrl).
-			request().
-			header("Authorization", "Basic " + basicAuthString).
-			buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
-			invoke();
+	    resolveTemplate("realm", realm).
+		request().
+		header("Authorization", "Basic " + basicAuthString).
+		buildPost(Entity.form(new Form("grant_type", "client_credentials"))).
+		invoke();
 	
 	
 	if (res.hasEntity()) {
@@ -869,26 +891,28 @@ public class Accounts
 			String token = reply.getString("access_token");
 			Accounts.log.trace("token: " + token);
 			Accounts.token = token;
-			return token;
+			return;
 		}
 		else {
 			Accounts.log.warn("login was not successful. Reply: HTTP " +
 					res.getStatus());
 			Accounts.log.warn("Body: " + body);
-			return null;
+			Accounts.token = null;
+			return;
 		}
 	}
 	else {
 		Accounts.log.trace("login reply has no content.");
-		return null;
+		Accounts.token = null;
+		return;
 	}
   }
 
   public boolean removeUserRole(String userId, String roleName)
   {
     String target = Accounts.baseUrl + (this.isRealmRole(roleName)
-      ? "realms/organicity/users/{userId}/role-mappings/realm"
-      : "realms/organicity/users/{userId}/role-mappings/clients/{client}");
+      ? "realms/{realm}/users/{userId}/role-mappings/realm"
+      : "realms/{realm}/users/{userId}/role-mappings/clients/{client}");
 
     String clientId = this.isRealmRole(roleName)
       ? ""
@@ -908,6 +932,7 @@ public class Accounts
 
     Response res = this.getClient().
       target(target).
+      resolveTemplate("realm", realm).
       resolveTemplate("userId", userId).
       resolveTemplate("client", clientId).
       request().
@@ -923,7 +948,8 @@ public class Accounts
   public UserIdentifier findUserByEmail(String email)
   {
     Response res = this.getClient().
-      target(Accounts.baseUrl + "realms/organicity/users").
+      target(Accounts.baseUrl + "realms/{realm}/users").
+      resolveTemplate("realm", realm).
       queryParam("email", email).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
@@ -975,7 +1001,8 @@ public class Accounts
   private JSONObject getClientDescription(String clientId)
   {
     Response res = this.getClient().
-      target(Accounts.baseUrl + "realms/organicity/clients/{id}").
+      target(Accounts.baseUrl + "realms/{realm}/clients/{id}").
+      resolveTemplate("realm", realm).
       resolveTemplate("id", clientId).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
@@ -1054,7 +1081,8 @@ public class Accounts
     String clientId = this.getClientIdByName(clientName);
 
     Response res = this.getClient().
-      target(Accounts.baseUrl + "realms/organicity/clients/{id}").
+      target(Accounts.baseUrl + "realms/{realm}/clients/{id}").
+      resolveTemplate("realm", realm).
       resolveTemplate("id", clientId).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
@@ -1106,10 +1134,11 @@ public class Accounts
 
     Accounts.log.debug("jsonClient: " + jsonClient.toString());
 
-    String url = "https://accounts.organicity.eu/realms/organicity/clients-registrations/openid-connect";
+    String url = "https://accounts.organicity.eu/realms/{realm}/clients-registrations/openid-connect";
 
     Response res = this.getClient().
       target(url).
+      resolveTemplate("realm", realm).
       request().
       header("Authorization", "Bearer " + this.getAuthToken()).
       header("Content-Type", "application/json").
@@ -1191,7 +1220,8 @@ public class Accounts
 	  
 	  // Get the id belonging to the client
 	  Response res3 = this.getClient().
-	      target(Accounts.baseUrl + "realms/organicity/clients/{id}/service-account-user").
+	      target(Accounts.baseUrl + "realms/{realm}/clients/{id}/service-account-user").
+	      resolveTemplate("realm", realm).
 	      resolveTemplate("id", id).
 	      request().
 	      header("Authorization", "Bearer " + this.getAuthToken()).
@@ -1239,7 +1269,8 @@ public class Accounts
 	  
 	  // Get the id belonging to the client
 	  Response res3 = this.getClient().
-	      target(Accounts.baseUrl + "realms/organicity/clients/{id}").
+	      target(Accounts.baseUrl + "realms/{realm}/clients/{id}").
+	      resolveTemplate("realm", realm).
 	      resolveTemplate("id", id).
 	      request().
 	      header("Authorization", "Bearer " + this.getAuthToken()).
@@ -1269,7 +1300,8 @@ public class Accounts
 	      put("protocol", "openid-connect");
 
 	  Response res = this.getClient().
-	      target(Accounts.baseUrl + "realms/organicity/clients").
+	      target(Accounts.baseUrl + "realms/{realm}/clients").
+	      resolveTemplate("realm", realm).
 	      request().
 	      header("Authorization", "Bearer " + this.getAuthToken()).
 	      header("Content-Type", "application/json").
@@ -1285,7 +1317,8 @@ public class Accounts
 		  
 		  // Get the id belonging to the client
 		  Response res3 = this.getClient().
-		      target(Accounts.baseUrl + "realms/organicity/clients/{id}/service-account-user").
+		      target(Accounts.baseUrl + "realms/{realm}/clients/{id}/service-account-user").
+		      resolveTemplate("realm", realm).
 		      resolveTemplate("id", getClientIdByName(clientId)).
 		      request().
 		      header("Authorization", "Bearer " + this.getAuthToken()).
@@ -1441,4 +1474,35 @@ public class Accounts
       }	  
   }  
   
+  public boolean resetPassword(String userId, String password) {
+
+	  System.out.println("Reset password for user with userId" + userId);
+
+	  JSONObject json = new JSONObject().put("type", "password").
+			  	put("value", password).
+			  	put("temporary", false);
+
+	  System.out.println(json.toString());
+
+	  // Get the id belonging to the client
+	  Response res = this.getClient().
+	      target(Accounts.baseUrl + "realms/{realm}/users/{userId}/reset-password").
+	      resolveTemplate("realm", realm).
+	      resolveTemplate("userId", userId).
+	      request().
+	      header("Authorization", "Bearer " + this.getAuthToken()).
+	      buildPut(Entity.json(json.toString())).
+	      invoke();
+
+	  System.out.println("Status: " + res.getStatus());
+
+	  if (res.getStatus() == Status.NO_CONTENT.getStatusCode()) {
+		  return true;
+	  } else if (res.getStatus() == Status.BAD_REQUEST.getStatusCode()) {
+		  String body = res.readEntity(String.class);
+		  throw new InternalServerErrorException(body);
+	  } else {
+		  throw new InternalServerErrorException("Unknown status code: " + res.getStatus());
+	  }
+  }
 }
