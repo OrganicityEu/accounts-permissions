@@ -1295,7 +1295,8 @@ public class Accounts
 	      put("enabled", true).
 	      put("serviceAccountsEnabled", true).
 	      put("standardFlowEnabled", true).
-	      put("clientAuthenticatorType", "confidential").
+	      put("clientAuthenticatorType", "client-secret").
+	      put("publicClient", false).
 	      put("directAccessGrantsEnabled", false).
 	      put("protocol", "openid-connect");
 
@@ -1476,7 +1477,7 @@ public class Accounts
   
   public boolean resetPassword(String userId, String password) {
 
-	  System.out.println("Reset password for user with userId" + userId);
+	  System.out.println("Reset password for user with userId " + userId);
 
 	  JSONObject json = new JSONObject().put("type", "password").
 			  	put("value", password).
