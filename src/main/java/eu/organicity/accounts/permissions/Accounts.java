@@ -1339,17 +1339,23 @@ public class Accounts
 		  } else {
 			  throw new InternalServerErrorException("Cannot find client id of just created client!");
 		  }
-		  
+
 		  if(roles.length > 0) {
 			  for (String role : roles) {
 				  // Set "Service Account" roles
+				  Accounts.log.info("Add Service Account role: " + role);
 				  if(!this.setUserRole(clientSub, role)) {
 					  // Do the rollback and throw an exception
 					  this.deleteClient(clientId);
 					  throw new BadRequestException("Client canot be not created. The role " + role + " is unknown.");
 				  }
 				  // Set "Scope" roles
-				  this.setClientScopeRole(clientId, role);
+				  Accounts.log.info("Add Scope role: " + role);
+				  if(!this.setClientScopeRole(clientId, role)) {
+					  // Do the rollback and throw an exception
+					  this.deleteClient(clientId);
+					  throw new BadRequestException("Client canot be not created. The role " + role + " is unknown.");
+				  }
 			  }
 		  }
 
