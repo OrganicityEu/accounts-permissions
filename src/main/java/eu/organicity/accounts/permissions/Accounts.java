@@ -1342,12 +1342,14 @@ public class Accounts
 		  
 		  if(roles.length > 0) {
 			  for (String role : roles) {
-				  // Role does not exists!
+				  // Set "Service Account" roles
 				  if(!this.setUserRole(clientSub, role)) {
 					  // Do the rollback and throw an exception
 					  this.deleteClient(clientId);
 					  throw new BadRequestException("Client canot be not created. The role " + role + " is unknown.");
-				  } 
+				  }
+				  // Set "Scope" roles
+				  this.setClientScopeRole(clientId, role);
 			  }
 		  }
 
@@ -1355,7 +1357,7 @@ public class Accounts
               put("client_id", clientId).
               put("sub", clientSub);
 
-          // Ass secret, if allowed!
+          // Get secret
           if(getSecret) {
         	  try {
         		  String secret = getClientSecret(clientId);
@@ -1365,7 +1367,7 @@ public class Accounts
 				  throw e;
         	  }
           }
-          
+
           return json;
 
 	  } else if(res.getStatus() == Status.CONFLICT.getStatusCode()){
